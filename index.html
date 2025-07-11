@@ -124,6 +124,7 @@
                     <table class="table table-hover">
                         <thead class="table-dark">
                             <tr>
+                                <th onclick="sortTable('customer')">発注者 <i class="bi bi-arrow-down-up"></i></th>
                                 <th onclick="sortTable('orderNumber')">注文番号 <i class="bi bi-arrow-down-up"></i></th>
                                 <th onclick="sortTable('productCode')">品番 <i class="bi bi-arrow-down-up"></i></th>
                                 <th onclick="sortTable('productName')">品名 <i class="bi bi-arrow-down-up"></i></th>
@@ -162,8 +163,22 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
+                                    <label class="form-label">発注者</label>
+                                    <input type="text" class="form-control" id="newCustomer" placeholder="取引先名を入力">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
                                     <label class="form-label">品番 *</label>
                                     <input type="text" class="form-control" id="newProductCode" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">品名 *</label>
+                                    <input type="text" class="form-control" id="newProductName" required>
                                 </div>
                             </div>
                         </div>
@@ -235,6 +250,7 @@
                 {
                     id: 'MN002BUV',
                     orderNumber: 'MN002BUV',
+                    customer: '株式会社田中製作所',
                     productCode: 'P815-110-0162',
                     productName: 'コネクタ VLN-15',
                     material: 'S14',
@@ -248,6 +264,7 @@
                 {
                     id: 'MH002BVD',
                     orderNumber: 'MH002BVD',
+                    customer: '佐藤工業株式会社',
                     productCode: 'P895-110-0163',
                     productName: 'コネクタ VLN-5',
                     material: 'S14',
@@ -261,6 +278,7 @@
                 {
                     id: 'FL003CVX',
                     orderNumber: 'FL003CVX',
+                    customer: '山田機械工業',
                     productCode: 'P920-150-0045',
                     productName: 'フランジ CF-8',
                     material: 'SCS',
@@ -326,6 +344,7 @@
                 const materialClass = `material-${order.material.toLowerCase()}`;
 
                 row.innerHTML = `
+                    <td>${order.customer || '-'}</td>
                     <td>${order.orderNumber}</td>
                     <td>${order.productCode}</td>
                     <td>${order.productName}</td>
@@ -433,6 +452,7 @@
             const newOrder = {
                 id: 'ORD-' + Date.now(),
                 orderNumber: document.getElementById('newOrderNumber').value,
+                customer: document.getElementById('newCustomer').value || '',
                 productCode: document.getElementById('newProductCode').value,
                 productName: document.getElementById('newProductName').value,
                 material: document.getElementById('newMaterial').value,
@@ -461,6 +481,7 @@
             if (!order) return;
 
             document.getElementById('newOrderNumber').value = order.orderNumber;
+            document.getElementById('newCustomer').value = order.customer || '';
             document.getElementById('newProductCode').value = order.productCode;
             document.getElementById('newProductName').value = order.productName;
             document.getElementById('newMaterial').value = order.material;
