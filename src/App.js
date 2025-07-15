@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Upload, Zap, Settings, MessageCircle, Send, Loader } from 'lucide-react';
+import { Search, Download, Upload, Zap, Settings, MessageCircle, Send, Loader, Brain, TrendingUp, AlertTriangle } from 'lucide-react';
+import { geminiAI } from './geminiService';
 
 // サンプルデータ
 const initialOrders = [
@@ -71,14 +72,16 @@ const AIAssistant = ({ orders, onOrdersUpdate }) => {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'こんにちは！ステンレス鋳造管理システムのAIアシスタントです。\n\n🎯 できること:\n• 「S14材質を表示して」- フィルタリング\n• 「納期を1週間延長」- データ修正\n• 「バッチを最適化」- 提案生成\n• 「緊急納期を確認」- 優先度確認\n\nお気軽にお声がけください！',
-      timestamp: new Date()
+      content: 'こんにちは！Gemini AI搭載のステンレス鋳造管理システムです。🤖\n\n🎯 新機能:\n• 自然言語での複雑な質問対応\n• 高度なデータ分析と予測\n• インテリジェントなバッチ最適化\n• リアルタイム品質管理アドバイス\n• 生産効率の改善提案\n\n💡 例: 「S14材質で緊急度の高い注文を分析して」\n「来週の生産計画を最適化して」\n\nお気軽にご質問ください！',
+      timestamp: new Date(),
+      isGemini: true
     }
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [analysisMode, setAnalysisMode] = useState(false);
 
-  // メッセージ送信処理
+  // Gemini AI メッセージ送信処理
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -94,101 +97,68 @@ const AIAssistant = ({ orders, onOrdersUpdate }) => {
     setIsLoading(true);
 
     try {
-      // 2秒待機（AI処理のシミュレーション）
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      let response = { message: '', action: '', data: null };
-
-      // 自然言語解析（簡易版）
-      if (currentInput.includes('S14') && (currentInput.includes('表示') || currentInput.includes('フィルタ') || currentInput.includes('見せ'))) {
-        const s14Orders = orders.filter(order => order.material === 'S14');
-        response = {
-          message: `S14材質の注文を表示しました！\n\n📊 結果: ${s14Orders.length}件の注文\n📦 総重量: ${s14Orders.reduce((sum, order) => sum + order.totalWeight, 0)}kg\n\n該当注文:\n${s14Orders.map(order => `• ${order.productName} (${order.totalWeight}kg)`).join('\n')}`,
-          action: 'filter_material',
-          data: s14Orders
-        };
-      } 
-      else if (currentInput.includes('S13') && (currentInput.includes('表示') || currentInput.includes('フィルタ') || currentInput.includes('見せ'))) {
-        const s13Orders = orders.filter(order => order.material === 'S13');
-        response = {
-          message: `S13材質の注文を表示しました！\n\n📊 結果: ${s13Orders.length}件の注文\n📦 総重量: ${s13Orders.reduce((sum, order) => sum + order.totalWeight, 0)}kg\n\n該当注文:\n${s13Orders.map(order => `• ${order.productName} (${order.totalWeight}kg)`).join('\n')}`,
-          action: 'filter_material',
-          data: s13Orders
-        };
-      }
-      else if (currentInput.includes('納期') && currentInput.includes('延長')) {
-        const extendDays = currentInput.includes('1週間') || currentInput.includes('7日') ? 7 : 
-                          currentInput.includes('2週間') || currentInput.includes('14日') ? 14 : 7;
+      // Gemini AI による高度な自然言語処理
+      const aiResponse = await geminiAI.generateResponse(currentInput, orders);
+      
+      // データ処理とアクション実行
+      let processedData = null;
+      
+      switch (aiResponse.action) {
+        case 'filter_material':
+          if (currentInput.includes('S14')) {
+            processedData = orders.filter(order => order.material === 'S14');
+          } else if (currentInput.includes('S13')) {
+            processedData = orders.filter(order => order.material === 'S13');
+          }
+          break;
         
-        const updatedOrders = orders.map(order => {
-          const newDate = new Date(order.deliveryDate);
-          newDate.setDate(newDate.getDate() + extendDays);
-          return {
-            ...order,
-            deliveryDate: newDate.toISOString().split('T')[0],
-            daysRemaining: order.daysRemaining + extendDays
-          };
-        });
-
-        response = {
-          message: `✅ 全注文の納期を${extendDays}日延長しました！\n\n📅 変更内容:\n${orders.map((order, index) => 
-            `• ${order.productName}: ${order.deliveryDate} → ${updatedOrders[index].deliveryDate}`
-          ).join('\n')}`,
-          action: 'extend_delivery',
-          data: updatedOrders
-        };
-      }
-      else if (currentInput.includes('緊急') || currentInput.includes('急ぎ') || currentInput.includes('優先')) {
-        const urgentOrders = orders.filter(order => order.daysRemaining < 7);
-        response = {
-          message: `🚨 緊急納期の注文を確認しました！\n\n⚠️ 緊急件数: ${urgentOrders.length}件\n\n詳細:\n${urgentOrders.map(order => 
-            `• ${order.productName}\n  納期: ${order.deliveryDate} (${order.daysRemaining < 0 ? '遅延' : '残り' + order.daysRemaining + '日'})\n  重量: ${order.totalWeight}kg`
-          ).join('\n\n')}`,
-          action: 'show_urgent',
-          data: urgentOrders
-        };
-      }
-      else if (currentInput.includes('バッチ') && (currentInput.includes('最適') || currentInput.includes('提案') || currentInput.includes('作成'))) {
-        const s14Total = orders.filter(o => o.material === 'S14').reduce((sum, o) => sum + o.totalWeight, 0);
-        const s13Total = orders.filter(o => o.material === 'S13').reduce((sum, o) => sum + o.totalWeight, 0);
+        case 'show_urgent':
+          processedData = orders.filter(order => order.daysRemaining < 7);
+          break;
         
-        response = {
-          message: `🎯 バッチ最適化を提案します！\n\n📦 推奨バッチ構成 (300kg目標):\n\n🔵 バッチ1 (S14材質):\n• 総重量: ${s14Total}kg\n• 300kgまで残り: ${Math.max(0, 300 - s14Total)}kg\n\n🟢 バッチ2 (S13材質):\n• 総重量: ${s13Total}kg\n• 300kgまで残り: ${Math.max(0, 300 - s13Total)}kg\n\n💡 提案:\n${s14Total < 300 ? `• S14材質の追加注文を検討 (${300 - s14Total}kg不足)` : '• S14材質は300kg到達済み'}\n${s13Total < 300 ? `• S13材質の追加注文を検討 (${300 - s13Total}kg不足)` : '• S13材質は300kg到達済み'}`,
-          action: 'batch_optimize'
-        };
-      }
-      else if (currentInput.includes('リセット') || currentInput.includes('全て') || currentInput.includes('すべて')) {
-        response = {
-          message: `🔄 フィルターをリセットして全注文を表示しました！\n\n📊 全体概要:\n• 総注文数: ${orders.length}件\n• 総重量: ${orders.reduce((sum, order) => sum + order.totalWeight, 0)}kg\n• S14材質: ${orders.filter(o => o.material === 'S14').length}件\n• S13材質: ${orders.filter(o => o.material === 'S13').length}件`,
-          action: 'reset_filter',
-          data: orders
-        };
-      }
-      else {
-        response = {
-          message: `「${currentInput}」について承知いたしました！\n\n🤖 利用可能なコマンド例:\n\n🔍 フィルタリング:\n• 「S14材質を表示」\n• 「S13材質を表示」\n• 「緊急納期を確認」\n\n📅 データ修正:\n• 「納期を1週間延長」\n• 「納期を2週間延長」\n\n🎯 分析・提案:\n• 「バッチを最適化」\n• 「バッチを提案」\n\n🔄 その他:\n• 「全て表示」「リセット」\n\nお気軽にお試しください！`,
-          action: 'help'
-        };
+        case 'extend_delivery':
+          const extendDays = currentInput.includes('1週間') || currentInput.includes('7日') ? 7 : 
+                            currentInput.includes('2週間') || currentInput.includes('14日') ? 14 : 7;
+          processedData = orders.map(order => {
+            const newDate = new Date(order.deliveryDate);
+            newDate.setDate(newDate.getDate() + extendDays);
+            return {
+              ...order,
+              deliveryDate: newDate.toISOString().split('T')[0],
+              daysRemaining: order.daysRemaining + extendDays
+            };
+          });
+          break;
+        
+        case 'reset_filter':
+          processedData = orders;
+          break;
+        
+        default:
+          processedData = aiResponse.data;
       }
 
       // アクション実行
-      if (response.data) {
-        onOrdersUpdate(response.data);
+      if (processedData) {
+        onOrdersUpdate(processedData);
       }
 
       const assistantMessage = {
         role: 'assistant',
-        content: response.message,
+        content: aiResponse.message,
         timestamp: new Date(),
-        actionTaken: response.action
+        actionTaken: aiResponse.action,
+        suggestions: aiResponse.suggestions,
+        isGemini: true
       };
 
       setMessages(prev => [...prev, assistantMessage]);
 
     } catch (error) {
+      console.error('Gemini AI Error:', error);
       const errorMessage = {
         role: 'assistant',
-        content: `❌ エラーが発生しました: ${error.message}\n\n💡 ヒント: インターネット接続を確認してください。`,
+        content: `❌ Gemini AI処理エラー: ${error.message}\n\n💡 ヒント: \n• API接続を確認してください\n• しばらく待ってから再試行してください\n• シンプルな質問から始めてみてください`,
         timestamp: new Date(),
         isError: true
       };
@@ -198,13 +168,70 @@ const AIAssistant = ({ orders, onOrdersUpdate }) => {
     }
   };
 
+  // データ分析機能
+  const handleAnalyzeOrders = async () => {
+    setAnalysisMode(true);
+    setIsLoading(true);
+    
+    try {
+      const analysis = await geminiAI.analyzeOrders(orders);
+      
+      const analysisMessage = {
+        role: 'assistant',
+        content: `📊 **データ分析結果**\n\n${analysis.analysis}\n\n⚠️ **リスク要因:**\n${analysis.risks.map(risk => `• ${risk}`).join('\n')}\n\n💡 **推奨事項:**\n${analysis.recommendations.map(rec => `• ${rec}`).join('\n')}\n\n🔧 **最適化案:**\n${analysis.optimizations.map(opt => `• ${opt}`).join('\n')}`,
+        timestamp: new Date(),
+        actionTaken: 'analysis',
+        isGemini: true,
+        isAnalysis: true
+      };
+      
+      setMessages(prev => [...prev, analysisMessage]);
+    } catch (error) {
+      console.error('Analysis Error:', error);
+    } finally {
+      setIsLoading(false);
+      setAnalysisMode(false);
+    }
+  };
+
+  // バッチ最適化機能
+  const handleOptimizeBatches = async () => {
+    setIsLoading(true);
+    
+    try {
+      const optimization = await geminiAI.optimizeBatches(orders);
+      
+      const optimizationMessage = {
+        role: 'assistant',
+        content: `🎯 **バッチ最適化提案**\n\n${optimization.summary}\n\n📦 **推奨バッチ構成:**\n${optimization.batches.map((batch, index) => 
+          `**バッチ${batch.id || index + 1}** (${batch.material})\n• 重量: ${batch.totalWeight}kg\n• 優先度: ${batch.priority}\n• 推奨実行日: ${batch.recommendedDate}\n`
+        ).join('\n')}\n\n⚡ **効率性評価:** ${optimization.efficiency}`,
+        timestamp: new Date(),
+        actionTaken: 'batch_optimization',
+        isGemini: true,
+        isBatchOptimization: true
+      };
+      
+      setMessages(prev => [...prev, optimizationMessage]);
+    } catch (error) {
+      console.error('Batch Optimization Error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const quickActions = [
-    'S14材質を表示',
+    'S14材質で緊急度の高い注文を分析して',
     'S13材質を表示', 
-    '緊急納期を確認',
-    'バッチを最適化',
-    '納期を1週間延長',
-    '全て表示'
+    '今週中に納期が来る注文を確認',
+    'バッチを最適化して生産効率を上げて',
+    '遅延している注文の対策を提案して',
+    '全注文の統計分析をして'
+  ];
+
+  const advancedActions = [
+    { label: '📊 深度分析', action: handleAnalyzeOrders, icon: TrendingUp },
+    { label: '🎯 バッチ最適化', action: handleOptimizeBatches, icon: Zap },
   ];
 
   return (
@@ -236,12 +263,12 @@ const AIAssistant = ({ orders, onOrdersUpdate }) => {
           {/* ヘッダー */}
           <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-t-lg">
             <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5" />
-              <span className="font-semibold">AIアシスタント</span>
+              <Brain className="w-5 h-5" />
+              <span className="font-semibold">Gemini AI アシスタント</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-xs">オンライン</span>
+              <span className="text-xs">Gemini Pro</span>
             </div>
           </div>
 
@@ -258,12 +285,36 @@ const AIAssistant = ({ orders, onOrdersUpdate }) => {
                       ? 'bg-blue-500 text-white'
                       : message.isError
                       ? 'bg-red-100 text-red-800 border border-red-300'
+                      : message.isGemini
+                      ? 'bg-gradient-to-br from-purple-50 to-blue-50 text-gray-800 border border-purple-200'
                       : 'bg-gray-100 text-gray-800'
                   }`}
                 >
+                  {message.isGemini && (
+                    <div className="flex items-center gap-1 mb-2 text-xs text-purple-600">
+                      <Brain className="w-3 h-3" />
+                      <span>Gemini AI</span>
+                    </div>
+                  )}
                   <div className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</div>
+                  {message.suggestions && (
+                    <div className="mt-3 p-2 bg-white bg-opacity-60 rounded border-l-2 border-purple-300">
+                      <div className="text-xs text-purple-700 font-medium mb-1">💡 関連する提案:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {message.suggestions.map((suggestion, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => setInputMessage(suggestion)}
+                            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 px-2 py-1 rounded transition-colors"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {message.actionTaken && (
-                    <div className="text-xs mt-2 opacity-70 bg-white bg-opacity-20 rounded px-2 py-1">
+                    <div className="text-xs mt-2 opacity-70 bg-white bg-opacity-30 rounded px-2 py-1">
                       ✅ アクション: {message.actionTaken}
                     </div>
                   )}
@@ -284,15 +335,32 @@ const AIAssistant = ({ orders, onOrdersUpdate }) => {
             )}
           </div>
 
-          {/* クイックアクション */}
-          <div className="p-3 border-t bg-gray-50">
-            <div className="text-xs text-gray-500 mb-2">📱 クイックアクション:</div>
+          {/* 高度なアクション */}
+          <div className="p-3 border-t bg-gradient-to-r from-purple-50 to-blue-50">
+            <div className="text-xs text-gray-600 mb-2">🚀 AI分析ツール:</div>
+            <div className="flex gap-2 mb-3">
+              {advancedActions.map((action, index) => {
+                const IconComponent = action.icon;
+                return (
+                  <button
+                    key={index}
+                    onClick={action.action}
+                    disabled={isLoading}
+                    className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white text-xs py-2 rounded transition-all disabled:opacity-50"
+                  >
+                    <IconComponent className="w-3 h-3" />
+                    {action.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-xs text-gray-500 mb-2">💬 質問例:</div>
             <div className="flex flex-wrap gap-1">
               {quickActions.map((action, index) => (
                 <button
                   key={index}
                   onClick={() => setInputMessage(action)}
-                  className="text-xs bg-white hover:bg-blue-50 border rounded px-2 py-1 transition-colors hover:border-blue-300"
+                  className="text-xs bg-white hover:bg-purple-50 border rounded px-2 py-1 transition-colors hover:border-purple-300"
                 >
                   {action}
                 </button>
@@ -321,7 +389,7 @@ const AIAssistant = ({ orders, onOrdersUpdate }) => {
               </button>
             </div>
             <div className="text-xs text-gray-500 mt-1">
-              💡 例: 「S14を表示」「納期を延長」「バッチ提案」
+              🤖 Gemini AI: 自然言語で複雑な分析や質問も可能です
             </div>
           </div>
         </div>
@@ -572,4 +640,6 @@ const CastingManagementApp = () => {
   );
 };
 
+// Export both the main component and as default
+export { CastingManagementApp };
 export default CastingManagementApp;
