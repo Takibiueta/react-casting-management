@@ -354,14 +354,17 @@
                 // 最初のページを表示
                 await renderPDFPage(1);
 
-                // テキスト抽出
-                const extractedTextContent = await extractTextFromPDF(pdf);
-                const extractedText = document.getElementById('extractedText');
-                if (extractedText) extractedText.value = extractedTextContent;
+                // テキスト抽出（ページ別）
+                const pagesData = await extractTextFromPDF(pdf);
+                
+                // 各ページのデータを抽出
+                for (let pageData of pagesData) {
+                    pageData.extractedData = extractDataFromText(pageData.text);
+                    console.log(`ページ${pageData.pageNumber}の抽出結果:`, pageData.extractedData);
+                }
 
-                // データ抽出
-                const extractedData = extractDataFromText(extractedTextContent);
-                populateExtractedData(extractedData);
+                // 複数ページ表示の生成
+                displayMultiPageResults(pagesData);
 
                 // UI更新
                 if (pdfProcessingStatus) pdfProcessingStatus.classList.add('d-none');
@@ -416,22 +419,30 @@
             }
         }
 
-        // PDFテキスト抽出
+        // PDFテキスト抽出（ページ別対応）
         async function extractTextFromPDF(pdf) {
-            let fullText = '';
+            const pagesData = [];
 
             for (let i = 1; i <= pdf.numPages; i++) {
                 try {
                     const page = await pdf.getPage(i);
                     const textContent = await page.getTextContent();
                     const pageText = textContent.items.map(item => item.str).join(' ');
-                    fullText += pageText + '\n';
+                    
+                    // ページごとのデータを格納
+                    pagesData.push({
+                        pageNumber: i,
+                        text: pageText,
+                        extractedData: null // 後で抽出データを格納
+                    });
+                    
+                    console.log(`ページ${i}のテキスト長:`, pageText.length);
                 } catch (error) {
                     console.error(`ページ ${i} のテキスト抽出エラー:`, error);
                 }
             }
 
-            return fullText.trim();
+            return pagesData;
         }
 
         // 改善されたデータ抽出機能
@@ -444,6 +455,7 @@
                 material: '',
                 unitWeight: '',
                 quantity: '',
+                orderDate: '',      // 発注日を追加
                 deliveryDate: '',
                 notes: ''
             };
@@ -579,21 +591,36 @@
                 const materials = [
                     'S13', 'S14', 'S15', 'SCM435', 'SCM440', 'SUS304', 'SUS316', 'SUS430',
                     'SCS13', 'SCS14', 'SCS16', 'SCS1', 'SCS2', 'SCS3', 'SCS5', 'SCS6',
-                    'FC200', 'FC250', 'FCD400', 'FCD450', 'FCD500', 'SS400', 'SM490',
-                    'A5052', 'A6061', 'A7075', 'C3604', 'C3771', 'FCD400-15'
+                    'FC200', 'FC250', 'FC300', 'FC350', 'FC400', 'FCD400', 'FCD450', 'FCD500', 'FCD600', 'FCD700',
+                    'SCPH1', 'SCPH2', 'SCPH11', 'SCPH12', 'SCPH13', 'SCPH21', 'SCPH32',
+                    'SS400', 'SM490', 'A5052', 'A6061', 'A7075', 'C3604', 'C3771'
                 ];
                 
-                // 材質パターンを優先順で検索
+                // 材質パターンを優先順で検索（FCD、FC、SCPH拡張）
                 const materialPatterns = [
-                    /材質[:：\s]*(S13|S14|S15|SCM435|SCM440|SUS304|SUS316|SUS430|SCS13|SCS14|SCS16|SCS1|SCS2|SCS3|SCS5|SCS6|FCD400[\-0-9]*)/i,
-                    /材料[:：\s]*(S13|S14|S15|SCM435|SCM440|SUS304|SUS316|SUS430|SCS13|SCS14|SCS16|SCS1|SCS2|SCS3|SCS5|SCS6|FCD400[\-0-9]*)/i,
-                    /【\s*(FCD400[\-0-9]*)\s*】/i,                        // 【FCD400-15】形式
-                    /(FCD400[\-0-9]+)/i,                                 // FCD400-15 直接マッチ
-                    /\[\s*(FCD400[\-0-9]*)\s*\]/i,                       // [FCD400-15]形式
-                    /^[\s]*【\s*(FCD400[\-0-9]*)\s*】[\s]*$/m,           // 行独立の【材質】パターン
-                    /\s+(FCD400[\-0-9]+)\s+/i,                           // スペースに囲まれた材質
-                    /質\s*[\(（]\s*(FCD400[\-0-9]*)\s*[\)）]/i,          // 質(FCD400-15)パターン
-                    /^[\s]*(FCD[0-9]+[\-0-9]*)[\s]*$/m                   // 行独立のFCD材質
+                    /材質[:：\s]*(S13|S14|S15|SCM[0-9]+|SUS[0-9]+|SCS[0-9]+|FCD[0-9]+[\-0-9]*|FC[0-9]+|SCPH[0-9]+)/i,
+                    /材料[:：\s]*(S13|S14|S15|SCM[0-9]+|SUS[0-9]+|SCS[0-9]+|FCD[0-9]+[\-0-9]*|FC[0-9]+|SCPH[0-9]+)/i,
+                    /【\s*(FCD[0-9]+[\-0-9]*)\s*】/i,                    // 【FCD450-10】形式
+                    /【\s*(FC[0-9]+[\-0-9]*)\s*】/i,                     // 【FC250】形式
+                    /【\s*(SCPH[0-9]+[\-0-9]*)\s*】/i,                   // 【SCPH2】形式
+                    /(FCD[0-9]+[\-0-9]*)/i,                              // FCD450-10 直接マッチ
+                    /(FC[0-9]+[\-0-9]*)/i,                               // FC250 直接マッチ
+                    /(SCPH[0-9]+[\-0-9]*)/i,                             // SCPH2 直接マッチ
+                    /\[\s*(FCD[0-9]+[\-0-9]*)\s*\]/i,                    // [FCD450-10]形式
+                    /\[\s*(FC[0-9]+[\-0-9]*)\s*\]/i,                     // [FC250]形式
+                    /\[\s*(SCPH[0-9]+[\-0-9]*)\s*\]/i,                   // [SCPH2]形式
+                    /^[\s]*【\s*(FCD[0-9]+[\-0-9]*)\s*】[\s]*$/m,        // 行独立の【FCD材質】パターン
+                    /^[\s]*【\s*(FC[0-9]+[\-0-9]*)\s*】[\s]*$/m,         // 行独立の【FC材質】パターン
+                    /^[\s]*【\s*(SCPH[0-9]+[\-0-9]*)\s*】[\s]*$/m,       // 行独立の【SCPH材質】パターン
+                    /\s+(FCD[0-9]+[\-0-9]*)\s+/i,                        // スペースに囲まれたFCD材質
+                    /\s+(FC[0-9]+[\-0-9]*)\s+/i,                         // スペースに囲まれたFC材質
+                    /\s+(SCPH[0-9]+[\-0-9]*)\s+/i,                       // スペースに囲まれたSCPH材質
+                    /質\s*[\(（]\s*(FCD[0-9]+[\-0-9]*)\s*[\)）]/i,       // 質(FCD450-10)パターン
+                    /質\s*[\(（]\s*(FC[0-9]+[\-0-9]*)\s*[\)）]/i,        // 質(FC250)パターン
+                    /質\s*[\(（]\s*(SCPH[0-9]+[\-0-9]*)\s*[\)）]/i,      // 質(SCPH2)パターン
+                    /^[\s]*(FCD[0-9]+[\-0-9]*)[\s]*$/m,                  // 行独立のFCD材質
+                    /^[\s]*(FC[0-9]+[\-0-9]*)[\s]*$/m,                   // 行独立のFC材質
+                    /^[\s]*(SCPH[0-9]+[\-0-9]*)[\s]*$/m                  // 行独立のSCPH材質
                 ];
                 
                 for (let i = 0; i < materialPatterns.length; i++) {
@@ -669,17 +696,44 @@
                     }
                 }
 
-                // 8. 納期抽出 - 日付形式（2025.06.05 → 2025/06/05）
-                const datePatterns = [
+                // 8. 発注日抽出 - 発注日、注文日の日付形式
+                const orderDatePatterns = [
+                    /発注日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 発注日：2025.01.15
+                    /注文日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 注文日：2025.01.15
+                    /受注日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 受注日：2025.01.15
+                    /日付[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,    // 日付：2025.01.15
+                    /作成日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 作成日：2025.01.15
+                    /([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/g                // 2025.01.15形式（一般）
+                ];
+                
+                for (const pattern of orderDatePatterns) {
+                    const match = text.match(pattern);
+                    if (match && match[1] && match[2] && match[3]) {
+                        const year = match[1];
+                        const month = match[2].padStart(2, '0');
+                        const day = match[3].padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        const date = new Date(dateStr);
+                        
+                        if (!isNaN(date.getTime()) && date.getFullYear() >= 2020 && date.getFullYear() <= 2030) {
+                            data.orderDate = dateStr;
+                            console.log('発注日抽出:', data.orderDate);
+                            break;
+                        }
+                    }
+                }
+
+                // 9. 納期抽出 - 日付形式（2025.06.05 → 2025/06/05）
+                const deliveryDatePatterns = [
                     /納期[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 納期：2025.06.05
                     /納入[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 納入：2025.06.05
                     /納入日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i, // 納入日：2025.06.05
                     /希望納期[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i, // 希望納期：2025.06.05
-                    /([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/g,              // 2025.06.05形式
-                    /([0-9]{4})[.\-\/]([0-9]{1,2})[.\-\/]([0-9]{1,2})/g                  // 2025/06/05形式
+                    /納入希望日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i, // 納入希望日：2025.06.05
+                    /完成希望[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i  // 完成希望：2025.06.05
                 ];
                 
-                for (const pattern of datePatterns) {
+                for (const pattern of deliveryDatePatterns) {
                     const match = text.match(pattern);
                     if (match && match[1] && match[2] && match[3]) {
                         const year = match[1];
@@ -729,8 +783,8 @@
                     }
                     
                     if (!data.material) {
-                        // FCD系の材質を探す
-                        const matMatch = text.match(/(FCD[0-9]+[\-0-9]*)/);
+                        // FCD、FC、SCPH系の材質を探す
+                        const matMatch = text.match(/(FCD[0-9]+[\-0-9]*|FC[0-9]+[\-0-9]*|SCPH[0-9]+[\-0-9]*)/);
                         if (matMatch) {
                             data.material = matMatch[1];
                             console.log('フォールバック材質:', data.material);
@@ -746,6 +800,7 @@
                 console.log('材質:', data.material);
                 console.log('重量:', data.unitWeight);
                 console.log('数量:', data.quantity);
+                console.log('発注日:', data.orderDate);   // 発注日を追加
                 console.log('納期:', data.deliveryDate);
 
             } catch (error) {
@@ -753,6 +808,242 @@
             }
 
             return data;
+        }
+
+        // 複数ページ結果表示機能
+        function displayMultiPageResults(pagesData) {
+            const extractedDataContainer = document.getElementById('extractedDataContainer');
+            if (!extractedDataContainer) return;
+
+            // 複数ページのタブとコンテンツを生成
+            let tabsHTML = '<ul class="nav nav-tabs" id="pdfPageTabs" role="tablist">';
+            let contentHTML = '<div class="tab-content" id="pdfPageTabContent">';
+
+            pagesData.forEach((pageData, index) => {
+                const isActive = index === 0 ? 'active' : '';
+                const pageNum = pageData.pageNumber;
+                
+                // タブヘッダー
+                tabsHTML += `
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link ${isActive}" id="page${pageNum}-tab" data-bs-toggle="tab" 
+                                data-bs-target="#page${pageNum}" type="button" role="tab" 
+                                aria-controls="page${pageNum}" aria-selected="${index === 0}">
+                            ページ ${pageNum}
+                            ${pageData.extractedData.orderNumber ? 
+                                '<span class="badge bg-success ms-1">✓</span>' : 
+                                '<span class="badge bg-warning ms-1">!</span>'}
+                        </button>
+                    </li>
+                `;
+
+                // タブコンテンツ
+                contentHTML += `
+                    <div class="tab-pane fade ${isActive ? 'show active' : ''}" id="page${pageNum}" 
+                         role="tabpanel" aria-labelledby="page${pageNum}-tab">
+                        <div class="row mt-3">
+                            <div class="col-md-8">
+                                ${generatePageDataForm(pageData.extractedData, pageNum)}
+                            </div>
+                            <div class="col-md-4">
+                                ${generatePageSummary(pageData.extractedData, pageNum)}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            tabsHTML += '</ul>';
+            contentHTML += '</div>';
+
+            extractedDataContainer.innerHTML = `
+                <div class="mb-3">
+                    <h5>📄 PDF解析結果 (${pagesData.length}ページ)</h5>
+                    <p class="text-muted">各ページのタブを選択して内容を確認してください。</p>
+                </div>
+                ${tabsHTML}
+                ${contentHTML}
+            `;
+
+            // UI表示
+            extractedDataContainer.classList.remove('d-none');
+            const noDataMessage = document.getElementById('noDataMessage');
+            if (noDataMessage) noDataMessage.classList.add('d-none');
+        }
+
+        // ページ別データフォーム生成
+        function generatePageDataForm(data, pageNumber) {
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">ページ ${pageNumber} - 抽出データ</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-2">
+                            <div class="col-sm-3"><strong>注文番号:</strong></div>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control form-control-sm ${data.orderNumber ? 'auto-filled' : ''}" 
+                                       value="${data.orderNumber}" id="orderNumber_${pageNumber}">
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-3"><strong>発注者:</strong></div>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control form-control-sm ${data.customer ? 'auto-filled' : ''}" 
+                                       value="${data.customer}" id="customer_${pageNumber}">
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-3"><strong>品番:</strong></div>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control form-control-sm ${data.productCode ? 'auto-filled' : ''}" 
+                                       value="${data.productCode}" id="productCode_${pageNumber}">
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-3"><strong>品名:</strong></div>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control form-control-sm ${data.productName ? 'auto-filled' : ''}" 
+                                       value="${data.productName}" id="productName_${pageNumber}">
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-3"><strong>材質:</strong></div>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control form-control-sm ${data.material ? 'auto-filled' : ''}" 
+                                       value="${data.material}" id="material_${pageNumber}">
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-3"><strong>単重量:</strong></div>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.1" class="form-control form-control-sm ${data.unitWeight ? 'auto-filled' : ''}" 
+                                       value="${data.unitWeight}" id="unitWeight_${pageNumber}">
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-3"><strong>数量:</strong></div>
+                            <div class="col-sm-9">
+                                <input type="number" class="form-control form-control-sm ${data.quantity ? 'auto-filled' : ''}" 
+                                       value="${data.quantity}" id="quantity_${pageNumber}">
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-3"><strong>発注日:</strong></div>
+                            <div class="col-sm-9">
+                                <input type="date" class="form-control form-control-sm ${data.orderDate ? 'auto-filled' : ''}" 
+                                       value="${data.orderDate}" id="orderDate_${pageNumber}">
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-3"><strong>納期:</strong></div>
+                            <div class="col-sm-9">
+                                <input type="date" class="form-control form-control-sm ${data.deliveryDate ? 'auto-filled' : ''}" 
+                                       value="${data.deliveryDate}" id="deliveryDate_${pageNumber}">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <button class="btn btn-primary btn-sm me-2" 
+                                        onclick="addOrderFromPage(${pageNumber})">
+                                    📝 この注文をシステムに追加
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" 
+                                        onclick="clearPageData(${pageNumber})">
+                                    🗑️ クリア
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ページ概要表示
+        function generatePageSummary(data, pageNumber) {
+            const fieldsCount = Object.values(data).filter(val => val && val.toString().trim()).length;
+            const totalFields = Object.keys(data).length - 1; // notesを除く
+            const completeness = Math.round((fieldsCount / totalFields) * 100);
+
+            return `
+                <div class="card bg-light">
+                    <div class="card-header">
+                        <h6 class="mb-0">📊 ページ ${pageNumber} 概要</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>データ完成度</span>
+                                <span>${completeness}%</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar ${completeness >= 70 ? 'bg-success' : completeness >= 40 ? 'bg-warning' : 'bg-danger'}" 
+                                     style="width: ${completeness}%"></div>
+                            </div>
+                        </div>
+                        <div class="small">
+                            <div class="mb-1">
+                                ${data.orderNumber ? '✅' : '❌'} 注文番号
+                            </div>
+                            <div class="mb-1">
+                                ${data.productCode ? '✅' : '❌'} 品番
+                            </div>
+                            <div class="mb-1">
+                                ${data.productName ? '✅' : '❌'} 品名
+                            </div>
+                            <div class="mb-1">
+                                ${data.material ? '✅' : '❌'} 材質
+                            </div>
+                            <div class="mb-1">
+                                ${data.unitWeight ? '✅' : '❌'} 単重量
+                            </div>
+                            <div class="mb-1">
+                                ${data.orderDate ? '✅' : '❌'} 発注日
+                            </div>
+                            <div class="mb-1">
+                                ${data.deliveryDate ? '✅' : '❌'} 納期
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ページデータから注文追加
+        function addOrderFromPage(pageNumber) {
+            const data = {
+                orderNumber: document.getElementById(`orderNumber_${pageNumber}`)?.value || '',
+                customer: document.getElementById(`customer_${pageNumber}`)?.value || '',
+                productCode: document.getElementById(`productCode_${pageNumber}`)?.value || '',
+                productName: document.getElementById(`productName_${pageNumber}`)?.value || '',
+                material: document.getElementById(`material_${pageNumber}`)?.value || '',
+                unitWeight: parseFloat(document.getElementById(`unitWeight_${pageNumber}`)?.value) || 0,
+                quantity: parseInt(document.getElementById(`quantity_${pageNumber}`)?.value) || 0,
+                orderDate: document.getElementById(`orderDate_${pageNumber}`)?.value || '',
+                deliveryDate: document.getElementById(`deliveryDate_${pageNumber}`)?.value || ''
+            };
+
+            // データ検証
+            if (!data.orderNumber || !data.productCode || !data.productName) {
+                alert('注文番号、品番、品名は必須項目です。');
+                return;
+            }
+
+            // 注文をシステムに追加（既存のaddOrder関数を使用）
+            addOrder(data);
+            
+            alert(`ページ ${pageNumber} の注文が正常に追加されました！`);
+        }
+
+        // ページデータクリア
+        function clearPageData(pageNumber) {
+            if (confirm(`ページ ${pageNumber} の入力データをクリアしますか？`)) {
+                const inputs = document.querySelectorAll(`#page${pageNumber} input`);
+                inputs.forEach(input => {
+                    input.value = '';
+                    input.classList.remove('auto-filled');
+                });
+            }
         }
 
         // 改善されたフォーム自動入力機能
@@ -1257,6 +1548,7 @@
                                 <th onclick="sortTable('unitWeight')">単重量 <i class="bi bi-arrow-down-up"></i></th>
                                 <th onclick="sortTable('quantity')">数量 <i class="bi bi-arrow-down-up"></i></th>
                                 <th onclick="sortTable('totalWeight')">総重量 <i class="bi bi-arrow-down-up"></i></th>
+                                <th onclick="sortTable('orderDate')">発注日 <i class="bi bi-arrow-down-up"></i></th>
                                 <th onclick="sortTable('deliveryDate')">納期 <i class="bi bi-arrow-down-up"></i></th>
                                 <th>状態</th>
                                 <th>操作</th>
@@ -1307,19 +1599,32 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">品名 *</label>
-                            <input type="text" class="form-control" id="newProductName" required>
-                        </div>
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     <label class="form-label">材質 *</label>
                                     <select class="form-select" id="newMaterial" required>
                                         <option value="">選択してください</option>
+                                        <option value="S13">S13</option>
                                         <option value="S14">S14</option>
-                                        <option value="SCS">SCS</option>
+                                        <option value="S15">S15</option>
+                                        <option value="SCS13">SCS13</option>
+                                        <option value="SCS14">SCS14</option>
                                         <option value="SUS304">SUS304</option>
+                                        <option value="SUS316">SUS316</option>
+                                        <option value="FC200">FC200</option>
+                                        <option value="FC250">FC250</option>
+                                        <option value="FC300">FC300</option>
+                                        <option value="FC400">FC400</option>
+                                        <option value="FCD400">FCD400</option>
+                                        <option value="FCD450">FCD450</option>
+                                        <option value="FCD500">FCD500</option>
+                                        <option value="SCPH1">SCPH1</option>
+                                        <option value="SCPH2">SCPH2</option>
+                                        <option value="SCPH11">SCPH11</option>
+                                        <option value="SCPH12">SCPH12</option>
+                                        <option value="SCPH13">SCPH13</option>
+                                        <option value="その他">その他（手入力）</option>
                                     </select>
                                 </div>
                             </div>
@@ -1336,9 +1641,19 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">納期 *</label>
-                            <input type="date" class="form-control" id="newDeliveryDate" required>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">発注日</label>
+                                    <input type="date" class="form-control" id="newOrderDate">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">納期 *</label>
+                                    <input type="date" class="form-control" id="newDeliveryDate" required>
+                                </div>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">備考</label>
@@ -1546,6 +1861,7 @@
                     unitWeight: 13.2,
                     quantity: 2,
                     totalWeight: 26.4,
+                    orderDate: '2025-01-10',
                     deliveryDate: '2025-01-31',
                     status: 'pending',
                     notes: '25.4.9在庫3ケ仕上済'
@@ -1556,10 +1872,11 @@
                     customer: '佐藤工業株式会社',
                     productCode: 'P895-110-0163',
                     productName: 'コネクタ VLN-5',
-                    material: 'S14',
+                    material: 'FCD450',
                     unitWeight: 7.3,
                     quantity: 16,
                     totalWeight: 116.8,
+                    orderDate: '2025-01-15',
                     deliveryDate: '2025-02-28',
                     status: 'pending',
                     notes: ''
@@ -1570,10 +1887,11 @@
                     customer: '山田機械工業',
                     productCode: 'P920-150-0045',
                     productName: 'フランジ CF-8',
-                    material: 'SCS',
+                    material: 'SCPH2',
                     unitWeight: 25.4,
                     quantity: 8,
                     totalWeight: 203.2,
+                    orderDate: '2025-01-12',
                     deliveryDate: '2025-02-15',
                     status: 'processing',
                     notes: '特急案件'
@@ -1641,6 +1959,7 @@
                     <td>${order.unitWeight}kg</td>
                     <td>${order.quantity}</td>
                     <td><strong>${order.totalWeight}kg</strong></td>
+                    <td>${order.orderDate ? formatDate(order.orderDate) : '-'}</td>
                     <td>${formatDate(order.deliveryDate)} ${isUrgent ? '<i class="bi bi-exclamation-triangle text-danger"></i>' : ''}</td>
                     <td>${statusBadge}</td>
                     <td>
@@ -1748,6 +2067,7 @@
                 unitWeight: unitWeight,
                 quantity: quantity,
                 totalWeight: unitWeight * quantity,
+                orderDate: document.getElementById('newOrderDate').value || '',  // 発注日を追加
                 deliveryDate: document.getElementById('newDeliveryDate').value,
                 status: 'pending',
                 notes: document.getElementById('newNotes').value
@@ -1776,6 +2096,7 @@
             document.getElementById('newMaterial').value = order.material;
             document.getElementById('newUnitWeight').value = order.unitWeight;
             document.getElementById('newQuantity').value = order.quantity;
+            document.getElementById('newOrderDate').value = order.orderDate || '';
             document.getElementById('newDeliveryDate').value = order.deliveryDate;
             document.getElementById('newNotes').value = order.notes || '';
 
