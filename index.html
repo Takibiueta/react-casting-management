@@ -596,38 +596,40 @@
                     'SS400', 'SM490', 'A5052', 'A6061', 'A7075', 'C3604', 'C3771'
                 ];
                 
-                // 材質パターンを優先順で検索（FCD、FC、SCPH拡張）
+                // 材質パターンを優先順で検索（FCD、FC、SCPH拡張、スペース対応）
                 const materialPatterns = [
                     /材質[:：\s]*(S13|S14|S15|SCM[0-9]+|SUS[0-9]+|SCS[0-9]+|FCD[0-9]+[\-0-9]*|FC[0-9]+|SCPH[0-9]+)/i,
                     /材料[:：\s]*(S13|S14|S15|SCM[0-9]+|SUS[0-9]+|SCS[0-9]+|FCD[0-9]+[\-0-9]*|FC[0-9]+|SCPH[0-9]+)/i,
-                    /【\s*(FCD[0-9]+[\-0-9]*)\s*】/i,                    // 【FCD450-10】形式
-                    /【\s*(FC[0-9]+[\-0-9]*)\s*】/i,                     // 【FC250】形式
-                    /【\s*(SCPH[0-9]+[\-0-9]*)\s*】/i,                   // 【SCPH2】形式
-                    /(FCD[0-9]+[\-0-9]*)/i,                              // FCD450-10 直接マッチ
-                    /(FC[0-9]+[\-0-9]*)/i,                               // FC250 直接マッチ
-                    /(SCPH[0-9]+[\-0-9]*)/i,                             // SCPH2 直接マッチ
-                    /\[\s*(FCD[0-9]+[\-0-9]*)\s*\]/i,                    // [FCD450-10]形式
-                    /\[\s*(FC[0-9]+[\-0-9]*)\s*\]/i,                     // [FC250]形式
-                    /\[\s*(SCPH[0-9]+[\-0-9]*)\s*\]/i,                   // [SCPH2]形式
-                    /^[\s]*【\s*(FCD[0-9]+[\-0-9]*)\s*】[\s]*$/m,        // 行独立の【FCD材質】パターン
-                    /^[\s]*【\s*(FC[0-9]+[\-0-9]*)\s*】[\s]*$/m,         // 行独立の【FC材質】パターン
-                    /^[\s]*【\s*(SCPH[0-9]+[\-0-9]*)\s*】[\s]*$/m,       // 行独立の【SCPH材質】パターン
-                    /\s+(FCD[0-9]+[\-0-9]*)\s+/i,                        // スペースに囲まれたFCD材質
-                    /\s+(FC[0-9]+[\-0-9]*)\s+/i,                         // スペースに囲まれたFC材質
-                    /\s+(SCPH[0-9]+[\-0-9]*)\s+/i,                       // スペースに囲まれたSCPH材質
-                    /質\s*[\(（]\s*(FCD[0-9]+[\-0-9]*)\s*[\)）]/i,       // 質(FCD450-10)パターン
-                    /質\s*[\(（]\s*(FC[0-9]+[\-0-9]*)\s*[\)）]/i,        // 質(FC250)パターン
-                    /質\s*[\(（]\s*(SCPH[0-9]+[\-0-9]*)\s*[\)）]/i,      // 質(SCPH2)パターン
-                    /^[\s]*(FCD[0-9]+[\-0-9]*)[\s]*$/m,                  // 行独立のFCD材質
-                    /^[\s]*(FC[0-9]+[\-0-9]*)[\s]*$/m,                   // 行独立のFC材質
-                    /^[\s]*(SCPH[0-9]+[\-0-9]*)[\s]*$/m                  // 行独立のSCPH材質
+                    /【\s*([FC]\s*[CD]*\s*[0-9]+\s*[\-0-9]*)\s*】/i,     // 【F   C   D400-15   】形式（スペース入り）
+                    /【\s*(FCD\s*[0-9]+\s*[\-0-9]*)\s*】/i,              // 【FCD450-10】形式
+                    /【\s*(FC\s*[0-9]+\s*[\-0-9]*)\s*】/i,               // 【FC250】形式
+                    /【\s*(SCPH\s*[0-9]+\s*[\-0-9]*)\s*】/i,             // 【SCPH2】形式
+                    /(FCD\s*[0-9]+\s*[\-0-9]*)/i,                        // FCD450-10 直接マッチ（スペース入り）
+                    /(FC\s*[0-9]+\s*[\-0-9]*)/i,                         // FC250 直接マッチ（スペース入り）
+                    /(SCPH\s*[0-9]+\s*[\-0-9]*)/i,                       // SCPH2 直接マッチ（スペース入り）
+                    /\[\s*(FCD\s*[0-9]+\s*[\-0-9]*)\s*\]/i,              // [FCD450-10]形式
+                    /\[\s*(FC\s*[0-9]+\s*[\-0-9]*)\s*\]/i,               // [FC250]形式
+                    /\[\s*(SCPH\s*[0-9]+\s*[\-0-9]*)\s*\]/i,             // [SCPH2]形式
+                    /^[\s]*【\s*(FCD\s*[0-9]+\s*[\-0-9]*)\s*】[\s]*$/m,  // 行独立の【FCD材質】パターン
+                    /^[\s]*【\s*(FC\s*[0-9]+\s*[\-0-9]*)\s*】[\s]*$/m,   // 行独立の【FC材質】パターン
+                    /^[\s]*【\s*(SCPH\s*[0-9]+\s*[\-0-9]*)\s*】[\s]*$/m, // 行独立の【SCPH材質】パターン
+                    /\s+(FCD\s*[0-9]+\s*[\-0-9]*)\s+/i,                  // スペースに囲まれたFCD材質
+                    /\s+(FC\s*[0-9]+\s*[\-0-9]*)\s+/i,                   // スペースに囲まれたFC材質
+                    /\s+(SCPH\s*[0-9]+\s*[\-0-9]*)\s+/i,                 // スペースに囲まれたSCPH材質
+                    /質\s*[\(（]\s*(FCD\s*[0-9]+\s*[\-0-9]*)\s*[\)）]/i, // 質(FCD450-10)パターン
+                    /質\s*[\(（]\s*(FC\s*[0-9]+\s*[\-0-9]*)\s*[\)）]/i,  // 質(FC250)パターン
+                    /質\s*[\(（]\s*(SCPH\s*[0-9]+\s*[\-0-9]*)\s*[\)）]/i, // 質(SCPH2)パターン
+                    /^[\s]*(FCD\s*[0-9]+\s*[\-0-9]*)[\s]*$/m,            // 行独立のFCD材質
+                    /^[\s]*(FC\s*[0-9]+\s*[\-0-9]*)[\s]*$/m,             // 行独立のFC材質
+                    /^[\s]*(SCPH\s*[0-9]+\s*[\-0-9]*)[\s]*$/m            // 行独立のSCPH材質
                 ];
                 
                 for (let i = 0; i < materialPatterns.length; i++) {
                     const pattern = materialPatterns[i];
                     const match = text.match(pattern);
                     if (match && match[1]) {
-                        data.material = match[1].toUpperCase();
+                        // スペースを除去して正規化
+                        data.material = match[1].replace(/\s+/g, '').toUpperCase();
                         console.log(`材質抽出（パターン${i+1}）:`, data.material, 'マッチ:', match[0]);
                         break;
                     } else if (i < 5) { // 最初の5パターンのみデバッグ出力
@@ -696,30 +698,35 @@
                     }
                 }
 
-                // 8. 発注日抽出 - 発注日、注文日の日付形式
+                // 8. 発注日抽出 - 発注日、注文日の日付形式（スペース対応）
                 const orderDatePatterns = [
-                    /発注日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 発注日：2025.01.15
-                    /注文日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 注文日：2025.01.15
-                    /受注日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 受注日：2025.01.15
-                    /日付[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,    // 日付：2025.01.15
-                    /作成日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 作成日：2025.01.15
-                    /([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/g                // 2025.01.15形式（一般）
+                    /発注日[:：\s]*([0-9]{4})[.\-\/年\s]*([0-9]{1,2})[.\-\/月\s]*([0-9]{1,2})/i,  // 発注日：2025.07.01
+                    /注文日[:：\s]*([0-9]{4})[.\-\/年\s]*([0-9]{1,2})[.\-\/月\s]*([0-9]{1,2})/i,  // 注文日：2025.07.01
+                    /受注日[:：\s]*([0-9]{4})[.\-\/年\s]*([0-9]{1,2})[.\-\/月\s]*([0-9]{1,2})/i,  // 受注日：2025.07.01
+                    /日付[:：\s]*([0-9]{4})[.\-\/年\s]*([0-9]{1,2})[.\-\/月\s]*([0-9]{1,2})/i,    // 日付：2025.07.01
+                    /作成日[:：\s]*([0-9]{4})[.\-\/年\s]*([0-9]{1,2})[.\-\/月\s]*([0-9]{1,2})/i,  // 作成日：2025.07.01
+                    /([0-9]{4})[\.\s]*([0-9]{1,2})[\.\s]*([0-9]{1,2})/g,                         // 2025.0 7. 01 形式（スペース入り）
+                    /([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/g                     // 2025.07.01形式（一般）
                 ];
                 
-                for (const pattern of orderDatePatterns) {
+                for (let i = 0; i < orderDatePatterns.length; i++) {
+                    const pattern = orderDatePatterns[i];
                     const match = text.match(pattern);
                     if (match && match[1] && match[2] && match[3]) {
-                        const year = match[1];
-                        const month = match[2].padStart(2, '0');
-                        const day = match[3].padStart(2, '0');
+                        // スペースを除去して数値に変換
+                        const year = match[1].replace(/\s+/g, '');
+                        const month = match[2].replace(/\s+/g, '').padStart(2, '0');
+                        const day = match[3].replace(/\s+/g, '').padStart(2, '0');
                         const dateStr = `${year}-${month}-${day}`;
                         const date = new Date(dateStr);
                         
                         if (!isNaN(date.getTime()) && date.getFullYear() >= 2020 && date.getFullYear() <= 2030) {
                             data.orderDate = dateStr;
-                            console.log('発注日抽出:', data.orderDate);
+                            console.log(`発注日抽出（パターン${i+1}）:`, data.orderDate, 'マッチ:', match[0]);
                             break;
                         }
+                    } else if (i < 3) { // 最初の3パターンのみデバッグ出力
+                        console.log(`発注日パターン${i+1}マッチなし:`, pattern);
                     }
                 }
 
@@ -751,7 +758,7 @@
                 }
 
                 // フォールバック抽出（特定のパターンに特化）
-                if (!data.orderNumber || !data.productCode || !data.productName || !data.material) {
+                if (!data.orderNumber || !data.productCode || !data.productName || !data.material || !data.orderDate) {
                     console.log('=== フォールバック抽出開始 ===');
                     
                     // より積極的な検索
@@ -783,11 +790,23 @@
                     }
                     
                     if (!data.material) {
-                        // FCD、FC、SCPH系の材質を探す
-                        const matMatch = text.match(/(FCD[0-9]+[\-0-9]*|FC[0-9]+[\-0-9]*|SCPH[0-9]+[\-0-9]*)/);
+                        // スペース入りFCD、FC、SCPH系の材質を探す
+                        const matMatch = text.match(/(F\s*C\s*D\s*[0-9]+\s*[\-0-9]*|F\s*C\s*[0-9]+\s*[\-0-9]*|S\s*C\s*P\s*H\s*[0-9]+\s*[\-0-9]*)/i);
                         if (matMatch) {
-                            data.material = matMatch[1];
+                            data.material = matMatch[1].replace(/\s+/g, '').toUpperCase();
                             console.log('フォールバック材質:', data.material);
+                        }
+                    }
+                    
+                    if (!data.orderDate) {
+                        // より柔軟な発注日パターン
+                        const dateMatch = text.match(/(2025)[\.\s]*([0-9]{1,2})[\.\s]*([0-9]{1,2})/);
+                        if (dateMatch) {
+                            const year = dateMatch[1];
+                            const month = dateMatch[2].replace(/\s+/g, '').padStart(2, '0');
+                            const day = dateMatch[3].replace(/\s+/g, '').padStart(2, '0');
+                            data.orderDate = `${year}-${month}-${day}`;
+                            console.log('フォールバック発注日:', data.orderDate);
                         }
                     }
                 }
