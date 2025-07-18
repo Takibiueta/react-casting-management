@@ -905,6 +905,14 @@
                 <div class="mb-3">
                     <h5>📄 PDF解析結果 (${pagesData.length}ページ)</h5>
                     <p class="text-muted">各ページのタブを選択して内容を確認してください。</p>
+                    <div class="d-flex gap-2 mb-3">
+                        <button class="btn btn-success btn-sm" onclick="addAllOrdersFromPDF()">
+                            📋 すべてのページを一括追加
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="validateAllPages()">
+                            ✅ 全ページ検証
+                        </button>
+                    </div>
                 </div>
                 ${tabsHTML}
                 ${contentHTML}
@@ -1060,6 +1068,153 @@
 
         // ページデータから注文追加
         function addOrderFromPage(pageNumber) {
+            try {
+                console.log(`注文追加処理開始 - ページ ${pageNumber}`);
+                
+                const data = {
+                    orderNumber: document.getElementById(`orderNumber_${pageNumber}`)?.value || '',
+                    customer: document.getElementById(`customer_${pageNumber}`)?.value || '',
+                    productCode: document.getElementById(`productCode_${pageNumber}`)?.value || '',
+                    productName: document.getElementById(`productName_${pageNumber}`)?.value || '',
+                    material: document.getElementById(`material_${pageNumber}`)?.value || '',
+                    unitWeight: parseFloat(document.getElementById(`unitWeight_${pageNumber}`)?.value) || 0,
+                    quantity: parseInt(document.getElementById(`quantity_${pageNumber}`)?.value) || 0,
+                    orderDate: document.getElementById(`orderDate_${pageNumber}`)?.value || '',
+                    deliveryDate: document.getElementById(`deliveryDate_${pageNumber}`)?.value || ''
+                };
+                
+                console.log('抽出データ:', data);
+
+            // データ検証
+            if (!data.orderNumber || !data.productCode || !data.productName) {
+                alert('注文番号、品番、品名は必須項目です。');
+                return;
+            }
+
+            // 既存の注文番号との重複チェック
+            const existingOrder = orders.find(order => order.orderNumber === data.orderNumber);
+            if (existingOrder) {
+                if (!confirm(`注文番号 "${data.orderNumber}" は既に存在します。上書きしますか？`)) {
+                    return;
+                }
+                // 既存注文を削除
+                const index = orders.findIndex(order => order.orderNumber === data.orderNumber);
+                if (index !== -1) {
+                    orders.splice(index, 1);
+                }
+            }
+
+            // 総重量を計算
+            const totalWeight = data.unitWeight * data.quantity;
+
+            // 新しい注文オブジェクトを作成
+            const newOrder = {
+                id: 'PDF-' + Date.now(),
+                orderNumber: data.orderNumber,
+                customer: data.customer || '',
+                productCode: data.productCode,
+                productName: data.productName,
+                material: data.material,
+                unitWeight: data.unitWeight,
+                quantity: data.quantity,
+                totalWeight: totalWeight,
+                orderDate: data.orderDate || '',
+                deliveryDate: data.deliveryDate,
+                status: 'pending',
+                notes: 'PDF読み込みより追加'
+            };
+
+            // 注文をシステムに追加
+            orders.push(newOrder);
+            filteredOrders = [...orders];
+            
+            // データ保存
+            saveData();
+            
+            // UI更新
+            updateDashboard();
+            updateTable();
+            
+            alert(`ページ ${pageNumber} の注文が正常に追加されました！\n注文番号: ${data.orderNumber}`);
+            console.log('注文追加完了:', newOrder);
+            
+            // 成功通知を表示
+            if (typeof showNotification === 'function') {
+                showNotification(`注文 "${data.orderNumber}" を追加しました`, 'success');
+            }
+            
+        } catch (error) {
+            console.error('注文追加エラー:', error);
+            alert(`注文追加中にエラーが発生しました: ${error.message}`);
+        }
+    }
+
+        // 全ページ一括追加
+        function addAllOrdersFromPDF() {
+            const pdfPageTabs = document.querySelectorAll('#pdfPageTabs .nav-link');
+            const pageNumbers = Array.from(pdfPageTabs).map(tab => {
+                const match = tab.id.match(/page(\d+)-tab/);
+                return match ? parseInt(match[1]) : null;
+            }).filter(num => num !== null);
+
+            if (pageNumbers.length === 0) {
+                alert('追加するページが見つかりません。');
+                return;
+            }
+
+            const confirmMessage = `${pageNumbers.length}ページすべての注文を一括追加しますか？\n\n追加されるページ: ${pageNumbers.join(', ')}`;
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+
+            let successCount = 0;
+            let errorCount = 0;
+            const errors = [];
+
+            pageNumbers.forEach(pageNumber => {
+                try {
+                    // 各ページのデータを取得
+                    const data = {
+                        orderNumber: document.getElementById(`orderNumber_${pageNumber}`)?.value || '',
+                        productCode: document.getElementById(`productCode_${pageNumber}`)?.value || '',
+                        productName: document.getElementById(`productName_${pageNumber}`)?.value || ''
+                    };
+
+                    // 必須項目チェック
+                    if (!data.orderNumber || !data.productCode || !data.productName) {
+                        errors.push(`ページ ${pageNumber}: 必須項目が不足しています`);
+                        errorCount++;
+                        return;
+                    }
+
+                    // 注文追加を実行（アラートなしバージョン）
+                    addOrderFromPageSilent(pageNumber);
+                    successCount++;
+                } catch (error) {
+                    errors.push(`ページ ${pageNumber}: ${error.message}`);
+                    errorCount++;
+                }
+            });
+
+            // 結果レポート
+            let message = `一括追加完了！\n\n成功: ${successCount}件\nエラー: ${errorCount}件`;
+            if (errors.length > 0) {
+                message += '\n\nエラー詳細:\n' + errors.join('\n');
+            }
+            
+            alert(message);
+            
+            // UI更新（一括処理後に実行）
+            updateDashboard();
+            updateTable();
+            
+            if (typeof showNotification === 'function') {
+                showNotification(`${successCount}件の注文を一括追加しました`, 'success');
+            }
+        }
+
+        // サイレント版注文追加（アラートなし）
+        function addOrderFromPageSilent(pageNumber) {
             const data = {
                 orderNumber: document.getElementById(`orderNumber_${pageNumber}`)?.value || '',
                 customer: document.getElementById(`customer_${pageNumber}`)?.value || '',
@@ -1072,16 +1227,86 @@
                 deliveryDate: document.getElementById(`deliveryDate_${pageNumber}`)?.value || ''
             };
 
-            // データ検証
-            if (!data.orderNumber || !data.productCode || !data.productName) {
-                alert('注文番号、品番、品名は必須項目です。');
-                return;
+            // 既存の注文番号との重複チェック（サイレント）
+            const existingOrder = orders.find(order => order.orderNumber === data.orderNumber);
+            if (existingOrder) {
+                const index = orders.findIndex(order => order.orderNumber === data.orderNumber);
+                if (index !== -1) {
+                    orders.splice(index, 1);
+                }
             }
 
-            // 注文をシステムに追加（既存のaddOrder関数を使用）
-            addOrder(data);
+            // 総重量を計算
+            const totalWeight = data.unitWeight * data.quantity;
+
+            // 新しい注文オブジェクトを作成
+            const newOrder = {
+                id: 'PDF-' + Date.now() + '-' + pageNumber,
+                orderNumber: data.orderNumber,
+                customer: data.customer || '',
+                productCode: data.productCode,
+                productName: data.productName,
+                material: data.material,
+                unitWeight: data.unitWeight,
+                quantity: data.quantity,
+                totalWeight: totalWeight,
+                orderDate: data.orderDate || '',
+                deliveryDate: data.deliveryDate,
+                status: 'pending',
+                notes: `PDF読み込みより追加 (ページ ${pageNumber})`
+            };
+
+            // 注文をシステムに追加
+            orders.push(newOrder);
+            filteredOrders = [...orders];
             
-            alert(`ページ ${pageNumber} の注文が正常に追加されました！`);
+            // データ保存
+            saveData();
+            
+            // UI更新（最後に一回だけ実行するため、ここではコメントアウト）
+            // updateDashboard();
+            // updateTable();
+        }
+
+        // 全ページ検証
+        function validateAllPages() {
+            const pdfPageTabs = document.querySelectorAll('#pdfPageTabs .nav-link');
+            const pageNumbers = Array.from(pdfPageTabs).map(tab => {
+                const match = tab.id.match(/page(\d+)-tab/);
+                return match ? parseInt(match[1]) : null;
+            }).filter(num => num !== null);
+
+            let report = '📋 全ページ検証レポート\n\n';
+            let validPages = 0;
+            let invalidPages = 0;
+
+            pageNumbers.forEach(pageNumber => {
+                const data = {
+                    orderNumber: document.getElementById(`orderNumber_${pageNumber}`)?.value || '',
+                    productCode: document.getElementById(`productCode_${pageNumber}`)?.value || '',
+                    productName: document.getElementById(`productName_${pageNumber}`)?.value || '',
+                    material: document.getElementById(`material_${pageNumber}`)?.value || '',
+                    deliveryDate: document.getElementById(`deliveryDate_${pageNumber}`)?.value || ''
+                };
+
+                const missing = [];
+                if (!data.orderNumber) missing.push('注文番号');
+                if (!data.productCode) missing.push('品番');
+                if (!data.productName) missing.push('品名');
+                if (!data.material) missing.push('材質');
+                if (!data.deliveryDate) missing.push('納期');
+
+                if (missing.length === 0) {
+                    report += `✅ ページ ${pageNumber}: 完全\n`;
+                    validPages++;
+                } else {
+                    report += `❌ ページ ${pageNumber}: ${missing.join(', ')} が不足\n`;
+                    invalidPages++;
+                }
+            });
+
+            report += `\n📊 検証結果: 完全 ${validPages}件, 不完全 ${invalidPages}件`;
+            alert(report);
         }
 
         // ページデータクリア
