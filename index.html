@@ -84,6 +84,12 @@
         let orders = [];
         let filteredOrders = [];
         
+        // 製品データと取引先データ
+        let products = [];
+        let customers = [];
+        let filteredProducts = [];
+        let filteredCustomers = [];
+        
         // クイッククエリ挿入
         function insertQuickQuery(query) {
             const chatInput = document.getElementById('chatInput');
@@ -290,6 +296,38 @@
                 console.log('データ保存完了');
             } catch (error) {
                 console.error('データ保存エラー:', error);
+            }
+        }
+
+        function saveProductData() {
+            try {
+                localStorage.setItem('castingProducts', JSON.stringify(products));
+                console.log('製品データ保存完了');
+            } catch (error) {
+                console.error('製品データ保存エラー:', error);
+            }
+        }
+
+        function saveCustomerData() {
+            try {
+                localStorage.setItem('castingCustomers', JSON.stringify(customers));
+                console.log('取引先データ保存完了');
+            } catch (error) {
+                console.error('取引先データ保存エラー:', error);
+            }
+        }
+
+        function loadAllData() {
+            try {
+                orders = JSON.parse(localStorage.getItem('castingOrders') || '[]');
+                products = JSON.parse(localStorage.getItem('castingProducts') || '[]');
+                customers = JSON.parse(localStorage.getItem('castingCustomers') || '[]');
+                filteredOrders = [...orders];
+                filteredProducts = [...products];
+                filteredCustomers = [...customers];
+                console.log('全データ読み込み完了');
+            } catch (error) {
+                console.error('データ読み込みエラー:', error);
             }
         }
 
@@ -2016,6 +2054,839 @@
                 showNotification(`${success}件の注文を一括追加しました`, 'success');
             }
         }
+
+        // === 不足していた関数の追加 ===
+        
+        // 新規注文追加モーダル表示
+        function showAddOrderModal() {
+            const today = new Date();
+            today.setDate(today.getDate() + 30);
+            document.getElementById('newDeliveryDate').value = today.toISOString().split('T')[0];
+            new bootstrap.Modal(document.getElementById('addOrderModal')).show();
+        }
+
+        // 新規注文保存
+        function saveNewOrder() {
+            const form = document.getElementById('addOrderForm');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            const unitWeight = parseFloat(document.getElementById('newUnitWeight').value);
+            const quantity = parseInt(document.getElementById('newQuantity').value);
+
+            const newOrder = {
+                id: 'ORD-' + Date.now(),
+                orderNumber: document.getElementById('newOrderNumber').value,
+                customer: document.getElementById('newCustomer').value || '',
+                productCode: document.getElementById('newProductCode').value,
+                productName: document.getElementById('newProductName').value,
+                material: document.getElementById('newMaterial').value,
+                unitWeight: unitWeight,
+                quantity: quantity,
+                totalWeight: unitWeight * quantity,
+                orderDate: document.getElementById('newOrderDate').value || '',
+                deliveryDate: document.getElementById('newDeliveryDate').value,
+                status: 'pending',
+                notes: document.getElementById('newNotes').value
+            };
+
+            orders.push(newOrder);
+            filteredOrders = [...orders];
+            saveData();
+            updateDashboard();
+            updateTable();
+
+            bootstrap.Modal.getInstance(document.getElementById('addOrderModal')).hide();
+            form.reset();
+            showNotification('新規注文を追加しました', 'success');
+        }
+
+        // Excel取込モーダル表示
+        function showExcelModal() {
+            resetExcelModal();
+            const modal = new bootstrap.Modal(document.getElementById('excelModal'));
+            modal.show();
+        }
+
+        // Excelモーダルリセット
+        function resetExcelModal() {
+            const excelFileInput = document.getElementById('excelFileInput');
+            const excelProcessingStatus = document.getElementById('excelProcessingStatus');
+            const excelPreview = document.getElementById('excelPreview');
+            const excelExtractedDataContainer = document.getElementById('excelExtractedDataContainer');
+            const excelNoDataMessage = document.getElementById('excelNoDataMessage');
+            const addFromExcelBtn = document.getElementById('addFromExcelBtn');
+
+            if (excelFileInput) excelFileInput.value = '';
+            if (excelProcessingStatus) excelProcessingStatus.classList.add('d-none');
+            if (excelPreview) excelPreview.classList.add('d-none');
+            if (excelExtractedDataContainer) excelExtractedDataContainer.classList.add('d-none');
+            if (excelNoDataMessage) excelNoDataMessage.classList.remove('d-none');
+            if (addFromExcelBtn) {
+                addFromExcelBtn.disabled = true;
+                addFromExcelBtn.innerHTML = '<i class="bi bi-plus-circle"></i> データを追加';
+                addFromExcelBtn.title = 'Excelファイルを読み込んでから使用してください';
+            }
+        }
+
+        // Excelファイル選択処理
+        async function handleExcelFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const validTypes = [
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+                'application/vnd.ms-excel', // .xls
+                'text/csv' // .csv
+            ];
+
+            if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
+                alert('Excel（.xlsx, .xls）またはCSV（.csv）ファイルを選択してください。');
+                return;
+            }
+
+            try {
+                // 処理中表示
+                const excelProcessingStatus = document.getElementById('excelProcessingStatus');
+                const excelNoDataMessage = document.getElementById('excelNoDataMessage');
+                
+                if (excelProcessingStatus) excelProcessingStatus.classList.remove('d-none');
+                if (excelNoDataMessage) excelNoDataMessage.classList.add('d-none');
+
+                // SheetJSライブラリを使用してExcelファイルを読み込み
+                if (typeof XLSX === 'undefined') {
+                    throw new Error('Excel処理ライブラリが読み込まれていません');
+                }
+
+                const arrayBuffer = await file.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                
+                // 最初のシートを取得
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                
+                // シートをJSONに変換
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                
+                console.log('Excel読み込み完了:', jsonData);
+                
+                // データ解析と表示
+                const extractedOrders = parseExcelData(jsonData);
+                displayExcelResults(extractedOrders, firstSheetName);
+
+                // UI更新
+                if (excelProcessingStatus) excelProcessingStatus.classList.add('d-none');
+                const excelPreview = document.getElementById('excelPreview');
+                const excelExtractedDataContainer = document.getElementById('excelExtractedDataContainer');
+                
+                if (excelPreview) excelPreview.classList.remove('d-none');
+                if (excelExtractedDataContainer) excelExtractedDataContainer.classList.remove('d-none');
+                if (excelNoDataMessage) excelNoDataMessage.classList.add('d-none');
+
+                // 一括追加ボタンを有効化
+                const addFromExcelBtn = document.getElementById('addFromExcelBtn');
+                if (addFromExcelBtn) {
+                    addFromExcelBtn.disabled = false;
+                    addFromExcelBtn.innerHTML = '<i class="bi bi-upload"></i> 全データ一括追加';
+                    addFromExcelBtn.title = `${extractedOrders.length}行のデータを一括でシステムに追加します`;
+                }
+
+            } catch (error) {
+                console.error('Excel処理エラー:', error);
+                alert('Excelファイルの処理中にエラーが発生しました：' + error.message);
+                const excelProcessingStatus = document.getElementById('excelProcessingStatus');
+                if (excelProcessingStatus) excelProcessingStatus.classList.add('d-none');
+            }
+        }
+
+        // Excelデータ解析
+        function parseExcelData(jsonData) {
+            if (!jsonData || jsonData.length < 2) {
+                return [];
+            }
+
+            const extractedOrders = [];
+            const headers = jsonData[0]; // 1行目をヘッダーとして使用
+            
+            // ヘッダーから列のインデックスを特定
+            const columnMap = {};
+            headers.forEach((header, index) => {
+                const headerStr = String(header).toLowerCase();
+                if (headerStr.includes('注文') || headerStr.includes('order')) {
+                    columnMap.orderNumber = index;
+                } else if (headerStr.includes('発注者') || headerStr.includes('customer') || headerStr.includes('顧客')) {
+                    columnMap.customer = index;
+                } else if (headerStr.includes('品番') || headerStr.includes('product') && headerStr.includes('code')) {
+                    columnMap.productCode = index;
+                } else if (headerStr.includes('品名') || headerStr.includes('product') && headerStr.includes('name')) {
+                    columnMap.productName = index;
+                } else if (headerStr.includes('材質') || headerStr.includes('material')) {
+                    columnMap.material = index;
+                } else if (headerStr.includes('単重量') || headerStr.includes('unit') && headerStr.includes('weight')) {
+                    columnMap.unitWeight = index;
+                } else if (headerStr.includes('数量') || headerStr.includes('quantity')) {
+                    columnMap.quantity = index;
+                } else if (headerStr.includes('発注日') || headerStr.includes('order') && headerStr.includes('date')) {
+                    columnMap.orderDate = index;
+                } else if (headerStr.includes('納期') || headerStr.includes('delivery')) {
+                    columnMap.deliveryDate = index;
+                } else if (headerStr.includes('備考') || headerStr.includes('notes')) {
+                    columnMap.notes = index;
+                }
+            });
+
+            // データ行を処理（2行目以降）
+            for (let i = 1; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0) continue;
+
+                const orderData = {
+                    rowNumber: i + 1,
+                    orderNumber: columnMap.orderNumber !== undefined ? String(row[columnMap.orderNumber] || '') : '',
+                    customer: columnMap.customer !== undefined ? String(row[columnMap.customer] || '') : '',
+                    productCode: columnMap.productCode !== undefined ? String(row[columnMap.productCode] || '') : '',
+                    productName: columnMap.productName !== undefined ? String(row[columnMap.productName] || '') : '',
+                    material: columnMap.material !== undefined ? String(row[columnMap.material] || '') : '',
+                    unitWeight: columnMap.unitWeight !== undefined ? parseFloat(row[columnMap.unitWeight]) || 0 : 0,
+                    quantity: columnMap.quantity !== undefined ? parseInt(row[columnMap.quantity]) || 0 : 0,
+                    orderDate: columnMap.orderDate !== undefined ? formatExcelDate(row[columnMap.orderDate]) : '',
+                    deliveryDate: columnMap.deliveryDate !== undefined ? formatExcelDate(row[columnMap.deliveryDate]) : '',
+                    notes: columnMap.notes !== undefined ? String(row[columnMap.notes] || '') : ''
+                };
+
+                // 最低限のデータがある行のみ追加
+                if (orderData.orderNumber || orderData.productCode || orderData.productName) {
+                    orderData.totalWeight = orderData.unitWeight * orderData.quantity;
+                    extractedOrders.push(orderData);
+                }
+            }
+
+            return extractedOrders;
+        }
+
+        // Excel日付フォーマット変換
+        function formatExcelDate(excelDate) {
+            if (!excelDate) return '';
+            
+            // 既に文字列の場合
+            if (typeof excelDate === 'string') {
+                return excelDate;
+            }
+            
+            // Excelのシリアル値の場合
+            if (typeof excelDate === 'number') {
+                const date = new Date((excelDate - 25569) * 86400 * 1000);
+                if (!isNaN(date.getTime())) {
+                    return date.toISOString().split('T')[0];
+                }
+            }
+            
+            return String(excelDate);
+        }
+
+        // Excel結果表示
+        function displayExcelResults(extractedOrders, sheetName) {
+            const excelExtractedDataContainer = document.getElementById('excelExtractedDataContainer');
+            if (!excelExtractedDataContainer) return;
+
+            if (extractedOrders.length === 0) {
+                excelExtractedDataContainer.innerHTML = `
+                    <div class="alert alert-warning">
+                        <h6>データが見つかりませんでした</h6>
+                        <p>シート「${sheetName}」から有効なデータを抽出できませんでした。</p>
+                        <small>ヘッダー行に「注文番号」「品番」「品名」などの列があることを確認してください。</small>
+                    </div>
+                `;
+                return;
+            }
+
+            let tableHTML = `
+                <div class="mb-3">
+                    <h5>📊 Excel解析結果</h5>
+                    <p class="text-muted">シート「${sheetName}」から ${extractedOrders.length} 件のデータを抽出しました。</p>
+                    <div class="d-flex gap-2 mb-3">
+                        <button class="btn btn-success btn-sm" onclick="addAllOrdersFromExcel()">
+                            📋 全データを一括追加
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="validateExcelData()">
+                            ✅ データ検証
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-striped">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>行</th>
+                                <th>注文番号</th>
+                                <th>発注者</th>
+                                <th>品番</th>
+                                <th>品名</th>
+                                <th>材質</th>
+                                <th>単重量</th>
+                                <th>数量</th>
+                                <th>総重量</th>
+                                <th>発注日</th>
+                                <th>納期</th>
+                                <th>備考</th>
+                                <th>状態</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            extractedOrders.forEach((order, index) => {
+                const isValid = order.orderNumber && order.productCode && order.productName;
+                const rowClass = isValid ? '' : 'table-warning';
+                const statusIcon = isValid ? '✅' : '⚠️';
+                
+                tableHTML += `
+                    <tr class="${rowClass}">
+                        <td>${order.rowNumber}</td>
+                        <td>${order.orderNumber}</td>
+                        <td>${order.customer}</td>
+                        <td>${order.productCode}</td>
+                        <td>${order.productName}</td>
+                        <td>${order.material}</td>
+                        <td>${order.unitWeight}kg</td>
+                        <td>${order.quantity}</td>
+                        <td><strong>${order.totalWeight.toFixed(1)}kg</strong></td>
+                        <td>${order.orderDate}</td>
+                        <td>${order.deliveryDate}</td>
+                        <td>${order.notes}</td>
+                        <td>${statusIcon}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            excelExtractedDataContainer.innerHTML = tableHTML;
+            excelExtractedDataContainer.classList.remove('d-none');
+        }
+
+        // Excel全データ一括追加
+        async function addAllOrdersFromExcel() {
+            const confirmation = confirm('Excelから抽出されたすべてのデータを一括でシステムに追加しますか？\n\n※データが不完全な行はスキップされます。');
+            if (!confirmation) return;
+
+            try {
+                // データを取得（グローバル変数または再解析）
+                const tableRows = document.querySelectorAll('#excelExtractedDataContainer tbody tr');
+                const extractedOrders = [];
+
+                tableRows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 12) {
+                        const orderData = {
+                            orderNumber: cells[1].textContent.trim(),
+                            customer: cells[2].textContent.trim(),
+                            productCode: cells[3].textContent.trim(),
+                            productName: cells[4].textContent.trim(),
+                            material: cells[5].textContent.trim(),
+                            unitWeight: parseFloat(cells[6].textContent.replace('kg', '')) || 0,
+                            quantity: parseInt(cells[7].textContent) || 0,
+                            orderDate: cells[9].textContent.trim(),
+                            deliveryDate: cells[10].textContent.trim(),
+                            notes: cells[11].textContent.trim()
+                        };
+
+                        if (orderData.orderNumber && orderData.productCode && orderData.productName) {
+                            extractedOrders.push(orderData);
+                        }
+                    }
+                });
+
+                let successCount = 0;
+                let errorCount = 0;
+                const errors = [];
+
+                extractedOrders.forEach((orderData, index) => {
+                    try {
+                        // 重複チェック
+                        const existingOrder = orders.find(order => order.orderNumber === orderData.orderNumber);
+                        if (existingOrder) {
+                            const orderIndex = orders.findIndex(order => order.orderNumber === orderData.orderNumber);
+                            if (orderIndex !== -1) {
+                                orders.splice(orderIndex, 1);
+                            }
+                        }
+
+                        // 新しい注文オブジェクトを作成
+                        const newOrder = {
+                            id: 'EXCEL-' + Date.now() + '-' + index,
+                            orderNumber: orderData.orderNumber,
+                            customer: orderData.customer || '',
+                            productCode: orderData.productCode,
+                            productName: orderData.productName,
+                            material: orderData.material,
+                            unitWeight: orderData.unitWeight,
+                            quantity: orderData.quantity,
+                            totalWeight: orderData.unitWeight * orderData.quantity,
+                            orderDate: orderData.orderDate || '',
+                            deliveryDate: orderData.deliveryDate,
+                            status: 'pending',
+                            notes: orderData.notes ? orderData.notes + ' [Excel取込]' : '[Excel取込]'
+                        };
+
+                        orders.push(newOrder);
+                        successCount++;
+
+                    } catch (error) {
+                        errorCount++;
+                        errors.push(`行 ${index + 1}: ${error.message}`);
+                        console.error(`Excel行${index + 1}でエラー:`, error);
+                    }
+                });
+
+                // システム更新
+                filteredOrders = [...orders];
+                saveData();
+                updateDashboard();
+                updateTable();
+
+                // 結果表示
+                let message = `📊 Excel一括追加が完了しました！\n\n`;
+                message += `✅ 成功: ${successCount}件\n`;
+                message += `❌ エラー: ${errorCount}件\n`;
+                
+                if (errors.length > 0) {
+                    message += `\n⚠️ エラー詳細:\n`;
+                    errors.slice(0, 3).forEach(error => {
+                        message += `• ${error}\n`;
+                    });
+                    if (errors.length > 3) {
+                        message += `• ...他 ${errors.length - 3}件\n`;
+                    }
+                }
+
+                alert(message);
+                showNotification(`${successCount}件の注文をExcelから一括追加しました`, 'success');
+
+                // モーダルを閉じる
+                if (successCount > 0) {
+                    setTimeout(() => {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('excelModal'));
+                        if (modal) modal.hide();
+                    }, 2000);
+                }
+
+            } catch (error) {
+                console.error('Excel一括追加エラー:', error);
+                alert(`Excel一括追加中にエラーが発生しました: ${error.message}`);
+            }
+        }
+
+        // Excelデータ検証
+        function validateExcelData() {
+            const tableRows = document.querySelectorAll('#excelExtractedDataContainer tbody tr');
+            let validCount = 0;
+            let invalidCount = 0;
+            let report = '📋 Excelデータ検証レポート\n\n';
+
+            tableRows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 12) {
+                    const rowNumber = cells[0].textContent;
+                    const orderNumber = cells[1].textContent.trim();
+                    const productCode = cells[3].textContent.trim();
+                    const productName = cells[4].textContent.trim();
+                    
+                    if (orderNumber && productCode && productName) {
+                        validCount++;
+                    } else {
+                        invalidCount++;
+                        const missing = [];
+                        if (!orderNumber) missing.push('注文番号');
+                        if (!productCode) missing.push('品番');
+                        if (!productName) missing.push('品名');
+                        report += `❌ 行 ${rowNumber}: ${missing.join(', ')} が不足\n`;
+                    }
+                }
+            });
+
+            report += `\n📊 検証結果: 有効 ${validCount}件, 無効 ${invalidCount}件`;
+            alert(report);
+        }
+
+        // CSVエクスポート機能
+        function exportToCSV() {
+            if (orders.length === 0) {
+                alert('エクスポートするデータがありません。');
+                return;
+            }
+
+            const headers = [
+                '注文番号', '発注者', '品番', '品名', '材質', 
+                '単重量(kg)', '数量', '総重量(kg)', '発注日', '納期', '状態', '備考'
+            ];
+
+            const csvData = orders.map(order => [
+                order.orderNumber || '',
+                order.customer || '',
+                order.productCode || '',
+                order.productName || '',
+                order.material || '',
+                order.unitWeight || 0,
+                order.quantity || 0,
+                order.totalWeight || 0,
+                order.orderDate || '',
+                order.deliveryDate || '',
+                order.status || '',
+                order.notes || ''
+            ]);
+
+            const csvContent = [headers, ...csvData]
+                .map(row => row.map(cell => `"${cell}"`).join(','))
+                .join('\n');
+
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `注文管理_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showNotification(`${orders.length}件の注文をCSVでエクスポートしました`, 'success');
+        }
+
+        // バッチ最適化機能
+        function runBatchOptimization() {
+            if (orders.length === 0) {
+                alert('最適化するデータがありません。');
+                return;
+            }
+
+            const materialGroups = {};
+            orders.forEach(order => {
+                if (!materialGroups[order.material]) {
+                    materialGroups[order.material] = [];
+                }
+                materialGroups[order.material].push(order);
+            });
+
+            let optimizationReport = '🎯 バッチ最適化提案\n\n';
+            let batchCount = 0;
+
+            Object.keys(materialGroups).forEach(material => {
+                const orders = materialGroups[material];
+                const totalWeight = orders.reduce((sum, order) => sum + order.totalWeight, 0);
+                const batchesNeeded = Math.ceil(totalWeight / 300);
+                
+                optimizationReport += `📦 ${material}材質:\n`;
+                optimizationReport += `  • 注文数: ${orders.length}件\n`;
+                optimizationReport += `  • 総重量: ${totalWeight.toFixed(1)}kg\n`;
+                optimizationReport += `  • 推奨バッチ数: ${batchesNeeded}バッチ\n`;
+                optimizationReport += `  • 平均バッチ重量: ${(totalWeight / batchesNeeded).toFixed(1)}kg\n\n`;
+                
+                batchCount += batchesNeeded;
+            });
+
+            optimizationReport += `📊 最適化結果:\n`;
+            optimizationReport += `• 総バッチ数: ${batchCount}バッチ\n`;
+            optimizationReport += `• 効率評価: ${batchCount <= Object.keys(materialGroups).length * 2 ? '良好' : '要改善'}\n`;
+
+            alert(optimizationReport);
+            showNotification('バッチ最適化を実行しました', 'info');
+        }
+
+        // 通知表示機能
+        function showNotification(message, type = 'info') {
+            const toastHtml = `
+                <div class="toast align-items-center text-bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            
+            let toastContainer = document.getElementById('toastContainer');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toastContainer';
+                toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+                toastContainer.style.zIndex = '1100';
+                document.body.appendChild(toastContainer);
+            }
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = toastContainer.lastElementChild;
+            const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 3000 });
+            toast.show();
+            
+            toastElement.addEventListener('hidden.bs.toast', () => {
+                toastElement.remove();
+            });
+        }
+
+        // フィルター・ソート機能
+        function applyFilters() {
+            const materialFilter = document.getElementById('materialFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+            const searchText = document.getElementById('searchBox').value.toLowerCase();
+
+            filteredOrders = orders.filter(order => {
+                const materialMatch = !materialFilter || order.material === materialFilter;
+                const statusMatch = !statusFilter || order.status === statusFilter;
+                const searchMatch = !searchText ||
+                    order.productName.toLowerCase().includes(searchText) ||
+                    order.productCode.toLowerCase().includes(searchText) ||
+                    order.orderNumber.toLowerCase().includes(searchText);
+
+                return materialMatch && statusMatch && searchMatch;
+            });
+
+            updateTable();
+        }
+
+        function clearFilters() {
+            document.getElementById('materialFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('searchBox').value = '';
+            filteredOrders = [...orders];
+            updateTable();
+        }
+
+        function sortTable(field) {
+            filteredOrders.sort((a, b) => {
+                let aVal = a[field];
+                let bVal = b[field];
+
+                if (field === 'deliveryDate') {
+                    aVal = new Date(aVal);
+                    bVal = new Date(bVal);
+                } else if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+
+                return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+            });
+
+            updateTable();
+        }
+
+        function editOrder(id) {
+            const order = orders.find(o => o.id === id);
+            if (!order) return;
+
+            document.getElementById('newOrderNumber').value = order.orderNumber;
+            document.getElementById('newCustomer').value = order.customer || '';
+            document.getElementById('newProductCode').value = order.productCode;
+            document.getElementById('newProductName').value = order.productName;
+            document.getElementById('newMaterial').value = order.material;
+            document.getElementById('newUnitWeight').value = order.unitWeight;
+            document.getElementById('newQuantity').value = order.quantity;
+            document.getElementById('newOrderDate').value = order.orderDate || '';
+            document.getElementById('newDeliveryDate').value = order.deliveryDate;
+            document.getElementById('newNotes').value = order.notes || '';
+
+            deleteOrder(id, false);
+            new bootstrap.Modal(document.getElementById('addOrderModal')).show();
+        }
+
+        function deleteOrder(id, showConfirm = true) {
+            if (showConfirm && !confirm('この注文を削除しますか？')) return;
+
+            orders = orders.filter(o => o.id !== id);
+            filteredOrders = filteredOrders.filter(o => o.id !== id);
+            saveData();
+            updateDashboard();
+            updateTable();
+
+            if (showConfirm) {
+                showNotification('注文を削除しました', 'info');
+            }
+        }
+
+        // === 初期化とサンプルデータ ===
+        
+        // 全データ読み込み
+        loadAllData();
+        
+        // 注文サンプルデータ初期化
+        if (orders.length === 0) {
+            orders = [
+                {
+                    id: 'MN002BUV',
+                    orderNumber: 'MN002BUV',
+                    customer: '株式会社田中製作所',
+                    productCode: 'P815-110-0162',
+                    productName: 'コネクタ VLN-15',
+                    material: 'S14',
+                    unitWeight: 13.2,
+                    quantity: 2,
+                    totalWeight: 26.4,
+                    orderDate: '2025-01-10',
+                    deliveryDate: '2025-01-31',
+                    status: 'pending',
+                    notes: '25.4.9在庫3ケ仕上済'
+                },
+                {
+                    id: 'MH002BVD',
+                    orderNumber: 'MH002BVD',
+                    customer: '佐藤工業株式会社',
+                    productCode: 'P895-110-0163',
+                    productName: 'コネクタ VLN-5',
+                    material: 'FCD450',
+                    unitWeight: 7.3,
+                    quantity: 16,
+                    totalWeight: 116.8,
+                    orderDate: '2025-01-15',
+                    deliveryDate: '2025-02-28',
+                    status: 'pending',
+                    notes: ''
+                },
+                {
+                    id: 'FL003CVX',
+                    orderNumber: 'FL003CVX',
+                    customer: '山田機械工業',
+                    productCode: 'P920-150-0045',
+                    productName: 'フランジ CF-8',
+                    material: 'SCPH2',
+                    unitWeight: 25.4,
+                    quantity: 8,
+                    totalWeight: 203.2,
+                    orderDate: '2025-01-12',
+                    deliveryDate: '2025-02-15',
+                    status: 'processing',
+                    notes: '特急案件'
+                }
+            ];
+            saveData();
+        }
+
+        // 製品データ初期化
+        if (products.length === 0) {
+            products = [
+                {
+                    id: 'PROD-001',
+                    productCode: 'P815-110-0162',
+                    productName: 'コネクタ VLN-15',
+                    category: 'コネクタ',
+                    material: 'S14',
+                    unitWeight: 13.2,
+                    standardPrice: 15000,
+                    description: 'VLシリーズ 15mm径コネクタ',
+                    specifications: '径15mm、長さ50mm',
+                    drawingNumber: 'DRW-815-110',
+                    status: 'active',
+                    createdDate: '2025-01-01',
+                    updatedDate: '2025-01-10'
+                },
+                {
+                    id: 'PROD-002',
+                    productCode: 'P895-110-0163',
+                    productName: 'コネクタ VLN-5',
+                    category: 'コネクタ',
+                    material: 'FCD450',
+                    unitWeight: 7.3,
+                    standardPrice: 8500,
+                    description: 'VLシリーズ 5mm径コネクタ',
+                    specifications: '径5mm、長さ30mm',
+                    drawingNumber: 'DRW-895-110',
+                    status: 'active',
+                    createdDate: '2025-01-01',
+                    updatedDate: '2025-01-05'
+                },
+                {
+                    id: 'PROD-003',
+                    productCode: 'P920-150-0045',
+                    productName: 'フランジ CF-8',
+                    category: 'フランジ',
+                    material: 'SCPH2',
+                    unitWeight: 25.4,
+                    standardPrice: 45000,
+                    description: 'CF-8フランジ 耐圧仕様',
+                    specifications: '外径150mm、厚み20mm',
+                    drawingNumber: 'DRW-920-150',
+                    status: 'active',
+                    createdDate: '2025-01-01',
+                    updatedDate: '2025-01-12'
+                }
+            ];
+            saveProductData();
+        }
+
+        // 取引先データ初期化
+        if (customers.length === 0) {
+            customers = [
+                {
+                    id: 'CUST-001',
+                    customerCode: 'C001',
+                    companyName: '株式会社田中製作所',
+                    companyNameKana: 'カブシキガイシャタナカセイサクショ',
+                    contactPerson: '田中 太郎',
+                    department: '調達部',
+                    email: 'tanaka@tanaka-mfg.co.jp',
+                    phone: '03-1234-5678',
+                    fax: '03-1234-5679',
+                    zipCode: '100-0001',
+                    address: '東京都千代田区千代田1-1-1',
+                    paymentTerms: '月末締め翌月末払い',
+                    creditLimit: 5000000,
+                    taxType: '内税',
+                    discountRate: 5,
+                    status: 'active',
+                    createdDate: '2024-01-15',
+                    updatedDate: '2025-01-10'
+                },
+                {
+                    id: 'CUST-002',
+                    customerCode: 'C002',
+                    companyName: '佐藤工業株式会社',
+                    companyNameKana: 'サトウコウギョウカブシキガイシャ',
+                    contactPerson: '佐藤 花子',
+                    department: '資材部',
+                    email: 'sato@sato-ind.co.jp',
+                    phone: '045-987-6543',
+                    fax: '045-987-6544',
+                    zipCode: '220-0001',
+                    address: '神奈川県横浜市西区西1-2-3',
+                    paymentTerms: '20日締め翌月10日払い',
+                    creditLimit: 3000000,
+                    taxType: '外税',
+                    discountRate: 3,
+                    status: 'active',
+                    createdDate: '2024-03-20',
+                    updatedDate: '2025-01-15'
+                },
+                {
+                    id: 'CUST-003',
+                    customerCode: 'C003',
+                    companyName: '山田機械工業',
+                    companyNameKana: 'ヤマダキカイコウギョウ',
+                    contactPerson: '山田 次郎',
+                    department: '購買課',
+                    email: 'yamada@yamada-mach.co.jp',
+                    phone: '06-5555-1111',
+                    fax: '06-5555-1112',
+                    zipCode: '550-0001',
+                    address: '大阪府大阪市西区西本町1-4-5',
+                    paymentTerms: '月末締め翌々月末払い',
+                    creditLimit: 8000000,
+                    taxType: '内税',
+                    discountRate: 7,
+                    status: 'active',
+                    createdDate: '2024-06-10',
+                    updatedDate: '2025-01-12'
+                }
+            ];
+            saveCustomerData();
+        }
     </script>
 </head>
 <body>
@@ -2027,17 +2898,44 @@
     </nav>
 
     <div class="container mt-4">
-        <div class="row mb-4">
+        <!-- ナビゲーションタブ -->
+        <div class="row mb-3">
             <div class="col-12">
-                <div class="d-flex flex-wrap gap-2">
-                    <button class="btn btn-success" onclick="showAddOrderModal()"><i class="bi bi-plus-circle"></i> 新規注文追加</button>
-                    <button class="btn btn-warning" onclick="showPDFModal()"><i class="bi bi-file-pdf"></i> PDF読み取り</button>
-                    <button class="btn btn-info" onclick="showExcelModal()"><i class="bi bi-file-spreadsheet"></i> Excel取込</button>
-                    <button class="btn btn-secondary" onclick="exportToCSV()"><i class="bi bi-download"></i> CSVエクスポート</button>
-                    <button class="btn btn-primary" onclick="runBatchOptimization()"><i class="bi bi-lightning"></i> バッチ最適化</button>
-                </div>
+                <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="orders-tab" data-bs-toggle="tab" data-bs-target="#orders-pane" type="button" role="tab">
+                            <i class="bi bi-list-ul"></i> 注文管理
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="products-tab" data-bs-toggle="tab" data-bs-target="#products-pane" type="button" role="tab">
+                            <i class="bi bi-box"></i> 製品管理
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="customers-tab" data-bs-toggle="tab" data-bs-target="#customers-pane" type="button" role="tab">
+                            <i class="bi bi-people"></i> 取引先管理
+                        </button>
+                    </li>
+                </ul>
             </div>
         </div>
+        
+        <!-- タブコンテンツ -->
+        <div class="tab-content" id="mainTabContent">
+            <!-- 注文管理タブ -->
+            <div class="tab-pane fade show active" id="orders-pane" role="tabpanel">
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-success" onclick="showAddOrderModal()"><i class="bi bi-plus-circle"></i> 新規注文追加</button>
+                            <button class="btn btn-warning" onclick="showPDFModal()"><i class="bi bi-file-pdf"></i> PDF読み取り</button>
+                            <button class="btn btn-info" onclick="showExcelModal()"><i class="bi bi-file-spreadsheet"></i> Excel取込</button>
+                            <button class="btn btn-secondary" onclick="exportToCSV()"><i class="bi bi-download"></i> CSVエクスポート</button>
+                            <button class="btn btn-primary" onclick="runBatchOptimization()"><i class="bi bi-lightning"></i> バッチ最適化</button>
+                        </div>
+                    </div>
+                </div>
 
         <div class="row mb-4">
             <div class="col-md-3">
@@ -2148,6 +3046,205 @@
                 </div>
             </div>
         </div>
+            </div>
+            <!-- 注文管理タブ終了 -->
+
+            <!-- 製品管理タブ -->
+            <div class="tab-pane fade" id="products-pane" role="tabpanel">
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-success" onclick="showAddProductModal()"><i class="bi bi-plus-circle"></i> 製品追加</button>
+                            <button class="btn btn-info" onclick="showExcelProductModal()"><i class="bi bi-file-spreadsheet"></i> Excel取込</button>
+                            <button class="btn btn-secondary" onclick="exportProductsToCSV()"><i class="bi bi-download"></i> CSVエクスポート</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card text-center bg-success text-white">
+                            <div class="card-body"><h5>製品総数</h5><h2 id="productCount">0</h2></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-info text-white">
+                            <div class="card-body"><h5>有効製品</h5><h2 id="activeProductCount">0</h2></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-warning text-white">
+                            <div class="card-body"><h5>製品カテゴリ</h5><h2 id="categoryCount">0</h2></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-primary text-white">
+                            <div class="card-body"><h5>平均単価</h5><h2 id="avgPrice">¥0</h2></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header"><h5><i class="bi bi-funnel"></i> 製品フィルター・検索</h5></div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <select class="form-select" id="productCategoryFilter" onchange="applyProductFilters()">
+                                            <option value="">すべてのカテゴリ</option>
+                                            <option value="コネクタ">コネクタ</option>
+                                            <option value="バルブ">バルブ</option>
+                                            <option value="継手">継手</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <select class="form-select" id="productStatusFilter" onchange="applyProductFilters()">
+                                            <option value="">すべてのステータス</option>
+                                            <option value="active">有効</option>
+                                            <option value="discontinued">製造中止</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="text" class="form-control" id="productSearchBox" placeholder="製品名・品番で検索" onkeyup="applyProductFilters()">
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-12">
+                                        <button class="btn btn-outline-secondary btn-sm" onclick="clearProductFilters()">フィルタークリア</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="bi bi-box"></i> 製品一覧</h5>
+                        <span class="badge bg-success" id="productDisplayCount">0件表示</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th onclick="sortProductTable('productCode')">品番 <i class="bi bi-arrow-down-up"></i></th>
+                                        <th onclick="sortProductTable('productName')">製品名 <i class="bi bi-arrow-down-up"></i></th>
+                                        <th onclick="sortProductTable('category')">カテゴリ <i class="bi bi-arrow-down-up"></i></th>
+                                        <th onclick="sortProductTable('material')">材質 <i class="bi bi-arrow-down-up"></i></th>
+                                        <th onclick="sortProductTable('unitWeight')">単重量 <i class="bi bi-arrow-down-up"></i></th>
+                                        <th onclick="sortProductTable('standardPrice')">標準価格 <i class="bi bi-arrow-down-up"></i></th>
+                                        <th>ステータス</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="productsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 製品管理タブ終了 -->
+
+            <!-- 取引先管理タブ -->
+            <div class="tab-pane fade" id="customers-pane" role="tabpanel">
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-success" onclick="showAddCustomerModal()"><i class="bi bi-plus-circle"></i> 取引先追加</button>
+                            <button class="btn btn-info" onclick="showExcelCustomerModal()"><i class="bi bi-file-spreadsheet"></i> Excel取込</button>
+                            <button class="btn btn-secondary" onclick="exportCustomersToCSV()"><i class="bi bi-download"></i> CSVエクスポート</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card text-center bg-primary text-white">
+                            <div class="card-body"><h5>取引先総数</h5><h2 id="customerCount">0</h2></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-success text-white">
+                            <div class="card-body"><h5>アクティブ</h5><h2 id="activeCustomerCount">0</h2></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-info text-white">
+                            <div class="card-body"><h5>月間平均注文</h5><h2 id="avgMonthlyOrders">0</h2></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-warning text-white">
+                            <div class="card-body"><h5>総注文実績</h5><h2 id="totalOrders">0件</h2></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header"><h5><i class="bi bi-funnel"></i> 取引先フィルター・検索</h5></div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <select class="form-select" id="customerTypeFilter" onchange="applyCustomerFilters()">
+                                            <option value="">すべてのタイプ</option>
+                                            <option value="direct">直接取引</option>
+                                            <option value="agent">代理店</option>
+                                            <option value="distributor">販売店</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <select class="form-select" id="customerStatusFilter" onchange="applyCustomerFilters()">
+                                            <option value="">すべてのステータス</option>
+                                            <option value="active">アクティブ</option>
+                                            <option value="inactive">非アクティブ</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="text" class="form-control" id="customerSearchBox" placeholder="会社名・担当者で検索" onkeyup="applyCustomerFilters()">
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-12">
+                                        <button class="btn btn-outline-secondary btn-sm" onclick="clearCustomerFilters()">フィルタークリア</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="bi bi-people"></i> 取引先一覧</h5>
+                        <span class="badge bg-primary" id="customerDisplayCount">0件表示</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th onclick="sortCustomerTable('customerCode')">取引先コード <i class="bi bi-arrow-down-up"></i></th>
+                                        <th onclick="sortCustomerTable('companyName')">会社名 <i class="bi bi-arrow-down-up"></i></th>
+                                        <th onclick="sortCustomerTable('contactPerson')">担当者 <i class="bi bi-arrow-down-up"></i></th>
+                                        <th onclick="sortCustomerTable('email')">連絡先 <i class="bi bi-arrow-down-up"></i></th>
+                                        <th onclick="sortCustomerTable('totalOrders')">注文実績 <i class="bi bi-arrow-down-up"></i></th>
+                                        <th>ステータス</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="customersTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 取引先管理タブ終了 -->
+        </div>
+        <!-- タブコンテンツ終了 -->
     </div>
 
     <!-- モーダル各種 -->
@@ -2406,227 +3503,547 @@
         </div>
     </div>
 
+    <!-- Excel取込モーダル -->
+    <div class="modal fade" id="excelModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-file-spreadsheet text-success"></i> Excel・CSV取込・データ抽出
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- Excel アップロード部分 -->
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h6><i class="bi bi-upload"></i> Excelファイル選択</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="excelFileInput" class="form-label">Excel・CSVファイルを選択</label>
+                                        <input type="file" class="form-control" id="excelFileInput" 
+                                               accept=".xlsx,.xls,.csv" onchange="handleExcelFileSelect(event)">
+                                        <div class="form-text">
+                                            Excel（.xlsx, .xls）またはCSV（.csv）ファイルをアップロードしてください
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="excelProcessingStatus" class="alert alert-info d-none">
+                                        <i class="bi bi-hourglass-split"></i> Excelファイルを解析中...
+                                    </div>
+                                    
+                                    <div id="excelPreview" class="border rounded p-3 bg-light d-none">
+                                        <h6>ファイル情報</h6>
+                                        <div id="excelFileInfo"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 抽出データプレビュー部分 -->
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h6><i class="bi bi-table"></i> データプレビュー</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="excelNoDataMessage" class="text-center text-muted">
+                                        <i class="bi bi-file-spreadsheet fs-1"></i>
+                                        <p>Excelファイルを選択すると、データが自動抽出されプレビューされます</p>
+                                        <small class="text-muted">
+                                            ヘッダー行に「注文番号」「品番」「品名」「材質」「数量」などの列名を含めてください
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 抽出されたデータ表示エリア -->
+                    <div class="mt-3">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="bi bi-grid"></i> 抽出データ一覧</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="excelExtractedDataContainer" class="d-none">
+                                    <!-- 動的に生成されるテーブル -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> キャンセル
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="addAllOrdersFromExcel()" id="addFromExcelBtn" disabled>
+                        <i class="bi bi-plus-circle"></i> データを追加
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 外部ライブラリ -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <script>
-        // === 完全実装システム ===
-        const GOOGLE_AI_CONFIG = {
-            apiKey: 'AIzaSyAL3eoIyjELD7MsXHCZnA0y2CZe-NpjnNQ',
-            endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
-        };
-
-        // OpenAI API設定（本番環境では環境変数から取得）
-        const OPENAI_CONFIG = {
-            apiKey: 'YOUR_OPENAI_API_KEY', // 実際のAPIキーに置き換えてください
-            endpoint: 'https://api.openai.com/v1/chat/completions',
-            model: 'gpt-3.5-turbo'
-        };
-
-        // Claude API設定（代替案）
-        const CLAUDE_CONFIG = {
-            apiKey: 'YOUR_CLAUDE_API_KEY', // 実際のAPIキーに置き換えてください
-            endpoint: 'https://api.anthropic.com/v1/messages',
-            model: 'claude-3-sonnet-20240229'
-        };
-
-        // グローバル変数の初期化
-        orders = JSON.parse(localStorage.getItem('castingOrders') || '[]');
-        filteredOrders = [...orders];
-
-
-        // サンプルデータ初期化
-        if (orders.length === 0) {
-            orders = [
+        // === 製品データと取引先データの初期化 ===
+        
+        // 製品データ初期化
+        function initializeProductData() {
+            products = [
                 {
-                    id: 'MN002BUV',
-                    orderNumber: 'MN002BUV',
-                    customer: '株式会社田中製作所',
+                    id: 1,
                     productCode: 'P815-110-0162',
                     productName: 'コネクタ VLN-15',
+                    category: 'コネクタ',
                     material: 'S14',
                     unitWeight: 13.2,
-                    quantity: 2,
-                    totalWeight: 26.4,
-                    orderDate: '2025-01-10',
-                    deliveryDate: '2025-01-31',
-                    status: 'pending',
-                    notes: '25.4.9在庫3ケ仕上済'
+                    standardPrice: 15000,
+                    description: '高圧用ステンレスコネクタ',
+                    specifications: 'φ15mm, 耐圧1.5MPa',
+                    drawingNumber: 'D-VLN-15-001',
+                    status: 'active',
+                    createdDate: '2024-01-15',
+                    modifiedDate: '2024-12-01'
                 },
                 {
-                    id: 'MH002BVD',
-                    orderNumber: 'MH002BVD',
-                    customer: '佐藤工業株式会社',
+                    id: 2,
                     productCode: 'P895-110-0163',
                     productName: 'コネクタ VLN-5',
-                    material: 'FCD450',
+                    category: 'コネクタ',
+                    material: 'S14',
                     unitWeight: 7.3,
-                    quantity: 16,
-                    totalWeight: 116.8,
-                    orderDate: '2025-01-15',
-                    deliveryDate: '2025-02-28',
-                    status: 'pending',
-                    notes: ''
+                    standardPrice: 8500,
+                    description: '中圧用ステンレスコネクタ',
+                    specifications: 'φ5mm, 耐圧1.0MPa',
+                    drawingNumber: 'D-VLN-5-001',
+                    status: 'active',
+                    createdDate: '2024-02-10',
+                    modifiedDate: '2024-11-15'
                 },
                 {
-                    id: 'FL003CVX',
-                    orderNumber: 'FL003CVX',
-                    customer: '山田機械工業',
-                    productCode: 'P920-150-0045',
-                    productName: 'フランジ CF-8',
-                    material: 'SCPH2',
-                    unitWeight: 25.4,
-                    quantity: 8,
-                    totalWeight: 203.2,
-                    orderDate: '2025-01-12',
-                    deliveryDate: '2025-02-15',
-                    status: 'processing',
-                    notes: '特急案件'
+                    id: 3,
+                    productCode: 'SCH11',
+                    productName: 'エアレジメンテ（2個セット）',
+                    category: 'バルブ',
+                    material: 'S13',
+                    unitWeight: 10.5,
+                    standardPrice: 22000,
+                    description: 'エア調整用レジデューサ',
+                    specifications: '2個1組、φ8mm',
+                    drawingNumber: 'D-SCH11-001',
+                    status: 'active',
+                    createdDate: '2024-03-05',
+                    modifiedDate: '2024-10-20'
+                },
+                {
+                    id: 4,
+                    productCode: 'P893-110-0162',
+                    productName: 'コネクタ VLN-3（4個セット）',
+                    category: 'コネクタ',
+                    material: 'S13',
+                    unitWeight: 6.0,
+                    standardPrice: 18000,
+                    description: '小径ステンレスコネクタセット',
+                    specifications: 'φ3mm×4個, 耐圧0.8MPa',
+                    drawingNumber: 'D-VLN-3-001',
+                    status: 'active',
+                    createdDate: '2024-04-20',
+                    modifiedDate: '2024-09-30'
+                },
+                {
+                    id: 5,
+                    productCode: 'FCV-25',
+                    productName: 'フローコントロールバルブ',
+                    category: 'バルブ',
+                    material: 'FCD450',
+                    unitWeight: 45.0,
+                    standardPrice: 85000,
+                    description: '流量制御用大型バルブ',
+                    specifications: 'φ25mm, 最大流量100L/min',
+                    drawingNumber: 'D-FCV-25-001',
+                    status: 'active',
+                    createdDate: '2024-05-10',
+                    modifiedDate: '2024-08-15'
                 }
             ];
-            saveData();
+            
+            filteredProducts = [...products];
+            console.log('製品データ初期化完了:', products.length + '件');
         }
 
-        // 初期化
-        document.addEventListener('DOMContentLoaded', function() {
-            filteredOrders = [...orders];
-            updateDashboard();
-            updateTable();
-            console.log('ステンレス鋳造管理システム完全版 起動完了');
-        });
+        // 取引先データ初期化
+        function initializeCustomerData() {
+            customers = [
+                {
+                    id: 1,
+                    customerCode: 'C001',
+                    companyName: '東京機械工業株式会社',
+                    contactPerson: '田中 太郎',
+                    department: '購買部',
+                    phone: '03-1234-5678',
+                    email: 'tanaka@tokyo-machinery.co.jp',
+                    address: '東京都港区芝公園1-2-3',
+                    postalCode: '105-0011',
+                    paymentTerms: '月末締め翌月末払い',
+                    taxType: '外税',
+                    customerType: 'direct',
+                    status: 'active',
+                    notes: '主要取引先、月間定期発注あり',
+                    lastOrderDate: '2025-01-15',
+                    totalOrders: 145,
+                    createdDate: '2020-04-01',
+                    modifiedDate: '2024-12-15'
+                },
+                {
+                    id: 2,
+                    customerCode: 'C002',
+                    companyName: '大阪製作所',
+                    contactPerson: '佐藤 花子',
+                    department: '調達課',
+                    phone: '06-8765-4321',
+                    email: 'sato@osaka-mfg.com',
+                    address: '大阪府大阪市北区梅田2-4-6',
+                    postalCode: '530-0001',
+                    paymentTerms: '20日締め翌月10日払い',
+                    taxType: '内税',
+                    customerType: 'agent',
+                    status: 'active',
+                    notes: '代理店経由、特注品多め',
+                    lastOrderDate: '2025-01-10',
+                    totalOrders: 78,
+                    createdDate: '2021-06-15',
+                    modifiedDate: '2024-11-20'
+                },
+                {
+                    id: 3,
+                    customerCode: 'C003',
+                    companyName: '名古屋産業株式会社',
+                    contactPerson: '鈴木 一郎',
+                    department: '資材部',
+                    phone: '052-3456-7890',
+                    email: 'suzuki@nagoya-ind.co.jp',
+                    address: '愛知県名古屋市中区栄3-15-33',
+                    postalCode: '460-0008',
+                    paymentTerms: '末日締め翌々月5日払い',
+                    taxType: '外税',
+                    customerType: 'distributor',
+                    status: 'active',
+                    notes: '販売店、小ロット多数',
+                    lastOrderDate: '2024-12-28',
+                    totalOrders: 203,
+                    createdDate: '2019-08-10',
+                    modifiedDate: '2024-10-05'
+                },
+                {
+                    id: 4,
+                    customerCode: 'C004',
+                    companyName: '九州エンジニアリング',
+                    contactPerson: '高橋 美代子',
+                    department: '技術部',
+                    phone: '092-9876-5432',
+                    email: 'takahashi@kyushu-eng.com',
+                    address: '福岡県福岡市博多区駅前1-1-1',
+                    postalCode: '812-0011',
+                    paymentTerms: '15日締め翌月末払い',
+                    taxType: '外税',
+                    customerType: 'direct',
+                    status: 'active',
+                    notes: '技術要求レベル高、高精度品中心',
+                    lastOrderDate: '2025-01-08',
+                    totalOrders: 96,
+                    createdDate: '2022-02-28',
+                    modifiedDate: '2024-12-10'
+                },
+                {
+                    id: 5,
+                    customerCode: 'C005',
+                    companyName: '北海道機工',
+                    contactPerson: '渡辺 次郎',
+                    department: '営業部',
+                    phone: '011-2468-1357',
+                    email: 'watanabe@hokkaido-eng.co.jp',
+                    address: '北海道札幌市中央区大通西10-4',
+                    postalCode: '060-0042',
+                    paymentTerms: '月末締め翌月20日払い',
+                    taxType: '内税',
+                    customerType: 'agent',
+                    status: 'inactive',
+                    notes: '冬季限定取引、現在休止中',
+                    lastOrderDate: '2024-10-15',
+                    totalOrders: 34,
+                    createdDate: '2023-05-12',
+                    modifiedDate: '2024-10-15'
+                }
+            ];
+            
+            filteredCustomers = [...customers];
+            console.log('取引先データ初期化完了:', customers.length + '件');
+        }
 
-        // 重複する関数定義は削除済み（上部で定義済み）
+        // === 製品管理機能 ===
+        
+        function updateProductDashboard() {
+            const activeProducts = products.filter(p => p.status === 'active');
+            const categories = [...new Set(products.map(p => p.category))];
+            const avgPrice = products.length > 0 ? 
+                Math.round(products.reduce((sum, p) => sum + p.standardPrice, 0) / products.length) : 0;
 
-        function applyFilters() {
-            const materialFilter = document.getElementById('materialFilter').value;
-            const statusFilter = document.getElementById('statusFilter').value;
-            const searchText = document.getElementById('searchBox').value.toLowerCase();
+            document.getElementById('productCount').textContent = products.length;
+            document.getElementById('activeProductCount').textContent = activeProducts.length;
+            document.getElementById('categoryCount').textContent = categories.length;
+            document.getElementById('avgPrice').textContent = '¥' + avgPrice.toLocaleString();
+        }
 
-            filteredOrders = orders.filter(order => {
-                const materialMatch = !materialFilter || order.material === materialFilter;
-                const statusMatch = !statusFilter || order.status === statusFilter;
+        function updateProductTable() {
+            const tbody = document.getElementById('productsTableBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            document.getElementById('productDisplayCount').textContent = filteredProducts.length + '件表示';
+
+            filteredProducts.forEach(product => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><code>${product.productCode}</code></td>
+                    <td>${product.productName}</td>
+                    <td><span class="badge bg-info">${product.category}</span></td>
+                    <td><span class="badge ${product.material === 'S14' ? 'bg-primary' : product.material === 'S13' ? 'bg-success' : 'bg-warning'}">${product.material}</span></td>
+                    <td>${product.unitWeight}kg</td>
+                    <td>¥${product.standardPrice.toLocaleString()}</td>
+                    <td><span class="badge ${product.status === 'active' ? 'bg-success' : 'bg-secondary'}">${product.status === 'active' ? '有効' : '製造中止'}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="editProduct(${product.id})">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct(${product.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function applyProductFilters() {
+            const categoryFilter = document.getElementById('productCategoryFilter').value;
+            const statusFilter = document.getElementById('productStatusFilter').value;
+            const searchText = document.getElementById('productSearchBox').value.toLowerCase();
+
+            filteredProducts = products.filter(product => {
+                const categoryMatch = !categoryFilter || product.category === categoryFilter;
+                const statusMatch = !statusFilter || product.status === statusFilter;
                 const searchMatch = !searchText ||
-                    order.productName.toLowerCase().includes(searchText) ||
-                    order.productCode.toLowerCase().includes(searchText) ||
-                    order.orderNumber.toLowerCase().includes(searchText);
+                    product.productName.toLowerCase().includes(searchText) ||
+                    product.productCode.toLowerCase().includes(searchText);
 
-                return materialMatch && statusMatch && searchMatch;
+                return categoryMatch && statusMatch && searchMatch;
             });
 
-            updateTable();
+            updateProductTable();
         }
 
-        function clearFilters() {
-            document.getElementById('materialFilter').value = '';
-            document.getElementById('statusFilter').value = '';
-            document.getElementById('searchBox').value = '';
-            filteredOrders = [...orders];
-            updateTable();
+        function clearProductFilters() {
+            document.getElementById('productCategoryFilter').value = '';
+            document.getElementById('productStatusFilter').value = '';
+            document.getElementById('productSearchBox').value = '';
+            filteredProducts = [...products];
+            updateProductTable();
         }
 
-        function sortTable(field) {
-            filteredOrders.sort((a, b) => {
+        function sortProductTable(field) {
+            filteredProducts.sort((a, b) => {
                 let aVal = a[field];
                 let bVal = b[field];
-
-                if (field === 'deliveryDate') {
-                    aVal = new Date(aVal);
-                    bVal = new Date(bVal);
-                } else if (typeof aVal === 'string') {
+                
+                if (typeof aVal === 'string') {
                     aVal = aVal.toLowerCase();
                     bVal = bVal.toLowerCase();
                 }
-
+                
                 return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
             });
-
-            updateTable();
+            
+            updateProductTable();
         }
 
-        function showAddOrderModal() {
-            const today = new Date();
-            today.setDate(today.getDate() + 30);
-            document.getElementById('newDeliveryDate').value = today.toISOString().split('T')[0];
+        // === 取引先管理機能 ===
+        
+        function updateCustomerDashboard() {
+            const activeCustomers = customers.filter(c => c.status === 'active');
+            const avgMonthlyOrders = customers.length > 0 ? 
+                Math.round(customers.reduce((sum, c) => sum + c.totalOrders, 0) / customers.length / 12) : 0;
+            const totalOrdersCount = customers.reduce((sum, c) => sum + c.totalOrders, 0);
 
-            new bootstrap.Modal(document.getElementById('addOrderModal')).show();
+            document.getElementById('customerCount').textContent = customers.length;
+            document.getElementById('activeCustomerCount').textContent = activeCustomers.length;
+            document.getElementById('avgMonthlyOrders').textContent = avgMonthlyOrders;
+            document.getElementById('totalOrders').textContent = totalOrdersCount + '件';
         }
 
-        function saveNewOrder() {
-            const form = document.getElementById('addOrderForm');
-            if (!form.checkValidity()) {
-                form.reportValidity();
-                return;
+        function updateCustomerTable() {
+            const tbody = document.getElementById('customersTableBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            document.getElementById('customerDisplayCount').textContent = filteredCustomers.length + '件表示';
+
+            filteredCustomers.forEach(customer => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><code>${customer.customerCode}</code></td>
+                    <td>${customer.companyName}</td>
+                    <td>${customer.contactPerson}</td>
+                    <td>
+                        <div>${customer.email}</div>
+                        <small class="text-muted">${customer.phone}</small>
+                    </td>
+                    <td>${customer.totalOrders}件</td>
+                    <td><span class="badge ${customer.status === 'active' ? 'bg-success' : 'bg-secondary'}">${customer.status === 'active' ? 'アクティブ' : '非アクティブ'}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="editCustomer(${customer.id})">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteCustomer(${customer.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function applyCustomerFilters() {
+            const typeFilter = document.getElementById('customerTypeFilter').value;
+            const statusFilter = document.getElementById('customerStatusFilter').value;
+            const searchText = document.getElementById('customerSearchBox').value.toLowerCase();
+
+            filteredCustomers = customers.filter(customer => {
+                const typeMatch = !typeFilter || customer.customerType === typeFilter;
+                const statusMatch = !statusFilter || customer.status === statusFilter;
+                const searchMatch = !searchText ||
+                    customer.companyName.toLowerCase().includes(searchText) ||
+                    customer.contactPerson.toLowerCase().includes(searchText);
+
+                return typeMatch && statusMatch && searchMatch;
+            });
+
+            updateCustomerTable();
+        }
+
+        function clearCustomerFilters() {
+            document.getElementById('customerTypeFilter').value = '';
+            document.getElementById('customerStatusFilter').value = '';
+            document.getElementById('customerSearchBox').value = '';
+            filteredCustomers = [...customers];
+            updateCustomerTable();
+        }
+
+        function sortCustomerTable(field) {
+            filteredCustomers.sort((a, b) => {
+                let aVal = a[field];
+                let bVal = b[field];
+                
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+                
+                return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+            });
+            
+            updateCustomerTable();
+        }
+
+        // === プレースホルダー関数（モーダル表示等） ===
+        
+        function showAddProductModal() {
+            alert('製品追加機能は今後実装予定です');
+        }
+
+        function showExcelProductModal() {
+            alert('製品Excel取込機能は今後実装予定です');
+        }
+
+        function exportProductsToCSV() {
+            alert('製品CSVエクスポート機能は今後実装予定です');
+        }
+
+        function editProduct(id) {
+            const product = products.find(p => p.id === id);
+            if (product) {
+                alert(`製品編集: ${product.productName}\n(ID: ${id})\n※編集機能は今後実装予定です`);
             }
+        }
 
-            const unitWeight = parseFloat(document.getElementById('newUnitWeight').value);
-            const quantity = parseInt(document.getElementById('newQuantity').value);
+        function deleteProduct(id) {
+            if (confirm('この製品を削除しますか？')) {
+                products = products.filter(p => p.id !== id);
+                filteredProducts = [...products];
+                updateProductTable();
+                updateProductDashboard();
+                showNotification('製品を削除しました', 'success');
+            }
+        }
 
-            const newOrder = {
-                id: 'ORD-' + Date.now(),
-                orderNumber: document.getElementById('newOrderNumber').value,
-                customer: document.getElementById('newCustomer').value || '',
-                productCode: document.getElementById('newProductCode').value,
-                productName: document.getElementById('newProductName').value,
-                material: document.getElementById('newMaterial').value,
-                unitWeight: unitWeight,
-                quantity: quantity,
-                totalWeight: unitWeight * quantity,
-                orderDate: document.getElementById('newOrderDate').value || '',  // 発注日を追加
-                deliveryDate: document.getElementById('newDeliveryDate').value,
-                status: 'pending',
-                notes: document.getElementById('newNotes').value
-            };
+        function showAddCustomerModal() {
+            alert('取引先追加機能は今後実装予定です');
+        }
 
-            orders.push(newOrder);
+        function showExcelCustomerModal() {
+            alert('取引先Excel取込機能は今後実装予定です');
+        }
+
+        function exportCustomersToCSV() {
+            alert('取引先CSVエクスポート機能は今後実装予定です');
+        }
+
+        function editCustomer(id) {
+            const customer = customers.find(c => c.id === id);
+            if (customer) {
+                alert(`取引先編集: ${customer.companyName}\n(ID: ${id})\n※編集機能は今後実装予定です`);
+            }
+        }
+
+        function deleteCustomer(id) {
+            if (confirm('この取引先を削除しますか？')) {
+                customers = customers.filter(c => c.id !== id);
+                filteredCustomers = [...customers];
+                updateCustomerTable();
+                updateCustomerDashboard();
+                showNotification('取引先を削除しました', 'success');
+            }
+        }
+
+        // DOMContentLoaded後の初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 製品・取引先データ初期化
+            initializeProductData();
+            initializeCustomerData();
+            
+            // 注文データ初期化
             filteredOrders = [...orders];
-            saveData();
             updateDashboard();
             updateTable();
+            
+            // 製品・取引先ダッシュボード更新
+            updateProductDashboard();
+            updateProductTable();
+            updateCustomerDashboard();
+            updateCustomerTable();
+            
+            console.log('ステンレス鋳造管理システム完全版 起動完了');
+            console.log('製品管理・取引先管理機能が追加されました');
+        });
+    </script>
 
-            bootstrap.Modal.getInstance(document.getElementById('addOrderModal')).hide();
-            form.reset();
-
-            showNotification('新規注文を追加しました', 'success');
-        }
-
-        function editOrder(id) {
-            const order = orders.find(o => o.id === id);
-            if (!order) return;
-
-            document.getElementById('newOrderNumber').value = order.orderNumber;
-            document.getElementById('newCustomer').value = order.customer || '';
-            document.getElementById('newProductCode').value = order.productCode;
-            document.getElementById('newProductName').value = order.productName;
-            document.getElementById('newMaterial').value = order.material;
-            document.getElementById('newUnitWeight').value = order.unitWeight;
-            document.getElementById('newQuantity').value = order.quantity;
-            document.getElementById('newOrderDate').value = order.orderDate || '';
-            document.getElementById('newDeliveryDate').value = order.deliveryDate;
-            document.getElementById('newNotes').value = order.notes || '';
-
-            deleteOrder(id, false);
-            new bootstrap.Modal(document.getElementById('addOrderModal')).show();
-        }
-
-        function deleteOrder(id, showConfirm = true) {
-            if (showConfirm && !confirm('この注文を削除しますか？')) return;
-
-            orders = orders.filter(o => o.id !== id);
-            filteredOrders = filteredOrders.filter(o => o.id !== id);
-            saveData();
-            updateDashboard();
-            updateTable();
-
-            if (showConfirm) {
-                showNotification('注文を削除しました', 'info');
-            }
-        }
-
-
-        function showExcelModal() {
-            alert('Excel取込機能：実装完了（モーダルは省略版）');
-        }
-
-        // === その他の機能実装 ===
+</body>
+</html>
