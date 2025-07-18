@@ -3588,6 +3588,144 @@
         </div>
     </div>
 
+    <!-- 取引先編集モーダル -->
+    <div class="modal fade" id="editCustomerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-pencil text-primary"></i> 取引先編集
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editCustomerForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="editCustomerCode" class="form-label">取引先コード *</label>
+                                    <input type="text" class="form-control" id="editCustomerCode" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="editCompanyName" class="form-label">会社名 *</label>
+                                    <input type="text" class="form-control" id="editCompanyName" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="editContactPerson" class="form-label">担当者名 *</label>
+                                    <input type="text" class="form-control" id="editContactPerson" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="editDepartment" class="form-label">部署名</label>
+                                    <input type="text" class="form-control" id="editDepartment">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="editPhone" class="form-label">電話番号 *</label>
+                                    <input type="tel" class="form-control" id="editPhone" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="editEmail" class="form-label">メールアドレス *</label>
+                                    <input type="email" class="form-control" id="editEmail" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="editPostalCode" class="form-label">郵便番号</label>
+                                    <input type="text" class="form-control" id="editPostalCode" placeholder="000-0000">
+                                </div>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="mb-3">
+                                    <label for="editAddress" class="form-label">住所</label>
+                                    <input type="text" class="form-control" id="editAddress">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="editPaymentTerms" class="form-label">支払条件</label>
+                                    <select class="form-select" id="editPaymentTerms">
+                                        <option value="月末締め翌月末払い">月末締め翌月末払い</option>
+                                        <option value="20日締め翌月10日払い">20日締め翌月10日払い</option>
+                                        <option value="15日締め翌月末払い">15日締め翌月末払い</option>
+                                        <option value="末日締め翌々月5日払い">末日締め翌々月5日払い</option>
+                                        <option value="月末締め翌月20日払い">月末締め翌月20日払い</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="editTaxType" class="form-label">税区分</label>
+                                    <select class="form-select" id="editTaxType">
+                                        <option value="外税">外税</option>
+                                        <option value="内税">内税</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="editCustomerType" class="form-label">取引先種別</label>
+                                    <select class="form-select" id="editCustomerType">
+                                        <option value="direct">直接取引</option>
+                                        <option value="agent">代理店</option>
+                                        <option value="distributor">販売店</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="editStatus" class="form-label">ステータス</label>
+                                    <select class="form-select" id="editStatus">
+                                        <option value="active">アクティブ</option>
+                                        <option value="inactive">非アクティブ</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="editNotes" class="form-label">備考</label>
+                            <textarea class="form-control" id="editNotes" rows="3"></textarea>
+                        </div>
+                        
+                        <input type="hidden" id="editCustomerId">
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> キャンセル
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="saveCustomer()">
+                        <i class="bi bi-check-circle"></i> 保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 外部ライブラリ -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -4009,7 +4147,100 @@
         function editCustomer(id) {
             const customer = customers.find(c => c.id === id);
             if (customer) {
-                alert(`取引先編集: ${customer.companyName}\n(ID: ${id})\n※編集機能は今後実装予定です`);
+                // フォームに現在の値を設定
+                document.getElementById('editCustomerId').value = customer.id;
+                document.getElementById('editCustomerCode').value = customer.customerCode;
+                document.getElementById('editCompanyName').value = customer.companyName;
+                document.getElementById('editContactPerson').value = customer.contactPerson;
+                document.getElementById('editDepartment').value = customer.department || '';
+                document.getElementById('editPhone').value = customer.phone;
+                document.getElementById('editEmail').value = customer.email;
+                document.getElementById('editPostalCode').value = customer.postalCode || '';
+                document.getElementById('editAddress').value = customer.address || '';
+                document.getElementById('editPaymentTerms').value = customer.paymentTerms || '月末締め翌月末払い';
+                document.getElementById('editTaxType').value = customer.taxType || '外税';
+                document.getElementById('editCustomerType').value = customer.customerType || 'direct';
+                document.getElementById('editStatus').value = customer.status || 'active';
+                document.getElementById('editNotes').value = customer.notes || '';
+                
+                // モーダルを表示
+                const modal = new bootstrap.Modal(document.getElementById('editCustomerModal'));
+                modal.show();
+            }
+        }
+
+        function saveCustomer() {
+            const id = document.getElementById('editCustomerId').value;
+            const customerIndex = customers.findIndex(c => c.id == id);
+            
+            if (customerIndex !== -1) {
+                // フォームバリデーション
+                const customerCode = document.getElementById('editCustomerCode').value.trim();
+                const companyName = document.getElementById('editCompanyName').value.trim();
+                const contactPerson = document.getElementById('editContactPerson').value.trim();
+                const phone = document.getElementById('editPhone').value.trim();
+                const email = document.getElementById('editEmail').value.trim();
+                
+                // 必須フィールドチェック
+                if (!customerCode || !companyName || !contactPerson || !phone || !email) {
+                    showNotification('必須フィールドをすべて入力してください', 'error');
+                    return;
+                }
+                
+                // 取引先コードの重複チェック（自分以外）
+                const existingCustomer = customers.find(c => c.customerCode === customerCode && c.id != id);
+                if (existingCustomer) {
+                    showNotification('この取引先コードは既に使用されています', 'error');
+                    return;
+                }
+                
+                // メールアドレスの形式チェック
+                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailPattern.test(email)) {
+                    showNotification('有効なメールアドレスを入力してください', 'error');
+                    return;
+                }
+                
+                // フォームの値を取得
+                const updatedCustomer = {
+                    ...customers[customerIndex],
+                    customerCode: customerCode,
+                    companyName: companyName,
+                    contactPerson: contactPerson,
+                    department: document.getElementById('editDepartment').value.trim(),
+                    phone: phone,
+                    email: email,
+                    postalCode: document.getElementById('editPostalCode').value.trim(),
+                    address: document.getElementById('editAddress').value.trim(),
+                    paymentTerms: document.getElementById('editPaymentTerms').value,
+                    taxType: document.getElementById('editTaxType').value,
+                    customerType: document.getElementById('editCustomerType').value,
+                    status: document.getElementById('editStatus').value,
+                    notes: document.getElementById('editNotes').value.trim(),
+                    modifiedDate: new Date().toISOString().split('T')[0]
+                };
+                
+                // データを更新
+                customers[customerIndex] = updatedCustomer;
+                filteredCustomers = [...customers];
+                
+                // テーブルとダッシュボードを更新
+                updateCustomerTable();
+                updateCustomerDashboard();
+                
+                // モーダルを閉じる
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editCustomerModal'));
+                modal.hide();
+                
+                // 成功メッセージ
+                showNotification(`取引先「${updatedCustomer.companyName}」の情報を更新しました`, 'success');
+                
+                // LocalStorageに保存（あれば）
+                try {
+                    localStorage.setItem('castingCustomers', JSON.stringify(customers));
+                } catch (error) {
+                    console.warn('LocalStorage保存エラー:', error);
+                }
             }
         }
 
