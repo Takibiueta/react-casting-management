@@ -705,8 +705,8 @@
                     /受注日[:：\s]*([0-9]{4})[.\-\/年\s]*([0-9]{1,2})[.\-\/月\s]*([0-9]{1,2})/i,  // 受注日：2025.07.01
                     /日付[:：\s]*([0-9]{4})[.\-\/年\s]*([0-9]{1,2})[.\-\/月\s]*([0-9]{1,2})/i,    // 日付：2025.07.01
                     /作成日[:：\s]*([0-9]{4})[.\-\/年\s]*([0-9]{1,2})[.\-\/月\s]*([0-9]{1,2})/i,  // 作成日：2025.07.01
-                    /([0-9]{4})[\.\s]*([0-9]{1,2})[\.\s]*([0-9]{1,2})/g,                         // 2025.0 7. 01 形式（スペース入り）
-                    /([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/g                     // 2025.07.01形式（一般）
+                    /発注日[:：\s]*([0-9]{4})[\.\s]*0?\s*([0-9]{1,2})[\.\s]*([0-9]{1,2})/i,      // 発注日：2025.0 7. 01 形式
+                    /([0-9]{4})[\.\s]*0?\s*([0-9]{1,2})[\.\s]*([0-9]{1,2})/g                     // 2025.0 7. 01 形式（一般）
                 ];
                 
                 for (let i = 0; i < orderDatePatterns.length; i++) {
@@ -714,16 +714,27 @@
                     const match = text.match(pattern);
                     if (match && match[1] && match[2] && match[3]) {
                         // スペースを除去して数値に変換
-                        const year = match[1].replace(/\s+/g, '');
-                        const month = match[2].replace(/\s+/g, '').padStart(2, '0');
-                        const day = match[3].replace(/\s+/g, '').padStart(2, '0');
-                        const dateStr = `${year}-${month}-${day}`;
-                        const date = new Date(dateStr);
+                        let year = match[1].replace(/\s+/g, '');
+                        let month = match[2].replace(/\s+/g, '');
+                        let day = match[3].replace(/\s+/g, '');
                         
-                        if (!isNaN(date.getTime()) && date.getFullYear() >= 2020 && date.getFullYear() <= 2030) {
-                            data.orderDate = dateStr;
-                            console.log(`発注日抽出（パターン${i+1}）:`, data.orderDate, 'マッチ:', match[0]);
-                            break;
+                        // 数値検証とパディング
+                        const yearNum = parseInt(year);
+                        const monthNum = parseInt(month);
+                        const dayNum = parseInt(day);
+                        
+                        if (yearNum >= 2020 && yearNum <= 2030 && monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+                            month = month.padStart(2, '0');
+                            day = day.padStart(2, '0');
+                            const dateStr = `${year}-${month}-${day}`;
+                            
+                            // 日付の妥当性チェック
+                            const date = new Date(dateStr);
+                            if (!isNaN(date.getTime()) && date.getFullYear() == yearNum && date.getMonth() == monthNum - 1 && date.getDate() == dayNum) {
+                                data.orderDate = dateStr;
+                                console.log(`発注日抽出（パターン${i+1}）:`, data.orderDate, 'マッチ:', match[0]);
+                                break;
+                            }
                         }
                     } else if (i < 3) { // 最初の3パターンのみデバッグ出力
                         console.log(`発注日パターン${i+1}マッチなし:`, pattern);
@@ -799,14 +810,29 @@
                     }
                     
                     if (!data.orderDate) {
-                        // より柔軟な発注日パターン
-                        const dateMatch = text.match(/(2025)[\.\s]*([0-9]{1,2})[\.\s]*([0-9]{1,2})/);
+                        // より柔軟な発注日パターン（2025.0 7. 01 など）
+                        const dateMatch = text.match(/(2025)[\.\s]*0?\s*([0-9]{1,2})[\.\s]*([0-9]{1,2})/);
                         if (dateMatch) {
                             const year = dateMatch[1];
-                            const month = dateMatch[2].replace(/\s+/g, '').padStart(2, '0');
-                            const day = dateMatch[3].replace(/\s+/g, '').padStart(2, '0');
-                            data.orderDate = `${year}-${month}-${day}`;
-                            console.log('フォールバック発注日:', data.orderDate);
+                            let month = dateMatch[2].replace(/\s+/g, '');
+                            let day = dateMatch[3].replace(/\s+/g, '');
+                            
+                            // 数値検証
+                            const monthNum = parseInt(month);
+                            const dayNum = parseInt(day);
+                            
+                            if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+                                month = month.padStart(2, '0');
+                                day = day.padStart(2, '0');
+                                const dateStr = `${year}-${month}-${day}`;
+                                
+                                // 日付の妥当性チェック
+                                const date = new Date(dateStr);
+                                if (!isNaN(date.getTime()) && date.getFullYear() == 2025 && date.getMonth() == monthNum - 1 && date.getDate() == dayNum) {
+                                    data.orderDate = dateStr;
+                                    console.log('フォールバック発注日:', data.orderDate);
+                                }
+                            }
                         }
                     }
                 }
@@ -980,9 +1006,10 @@
 
         // ページ概要表示
         function generatePageSummary(data, pageNumber) {
-            const fieldsCount = Object.values(data).filter(val => val && val.toString().trim()).length;
-            const totalFields = Object.keys(data).length - 1; // notesを除く
-            const completeness = Math.round((fieldsCount / totalFields) * 100);
+            // 重要フィールドのみをカウント（notesは除外）
+            const importantFields = ['orderNumber', 'productCode', 'productName', 'material', 'unitWeight', 'quantity', 'orderDate', 'deliveryDate'];
+            const filledFields = importantFields.filter(field => data[field] && data[field].toString().trim() !== '');
+            const completeness = Math.round((filledFields.length / importantFields.length) * 100);
 
             return `
                 <div class="card bg-light">
@@ -1002,25 +1029,28 @@
                         </div>
                         <div class="small">
                             <div class="mb-1">
-                                ${data.orderNumber ? '✅' : '❌'} 注文番号
+                                ${data.orderNumber && data.orderNumber.trim() ? '✅' : '❌'} 注文番号
                             </div>
                             <div class="mb-1">
-                                ${data.productCode ? '✅' : '❌'} 品番
+                                ${data.productCode && data.productCode.trim() ? '✅' : '❌'} 品番
                             </div>
                             <div class="mb-1">
-                                ${data.productName ? '✅' : '❌'} 品名
+                                ${data.productName && data.productName.trim() ? '✅' : '❌'} 品名
                             </div>
                             <div class="mb-1">
-                                ${data.material ? '✅' : '❌'} 材質
+                                ${data.material && data.material.trim() ? '✅' : '❌'} 材質
                             </div>
                             <div class="mb-1">
-                                ${data.unitWeight ? '✅' : '❌'} 単重量
+                                ${data.unitWeight && data.unitWeight.toString().trim() ? '✅' : '❌'} 単重量
                             </div>
                             <div class="mb-1">
-                                ${data.orderDate ? '✅' : '❌'} 発注日
+                                ${data.quantity && data.quantity.toString().trim() ? '✅' : '❌'} 数量
                             </div>
                             <div class="mb-1">
-                                ${data.deliveryDate ? '✅' : '❌'} 納期
+                                ${data.orderDate && data.orderDate.trim() ? '✅' : '❌'} 発注日
+                            </div>
+                            <div class="mb-1">
+                                ${data.deliveryDate && data.deliveryDate.trim() ? '✅' : '❌'} 納期
                             </div>
                         </div>
                     </div>
