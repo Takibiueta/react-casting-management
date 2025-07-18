@@ -283,6 +283,124 @@
             }
         }
 
+        // === 共通データ管理関数 ===
+        function saveData() {
+            try {
+                localStorage.setItem('castingOrders', JSON.stringify(orders));
+                console.log('データ保存完了');
+            } catch (error) {
+                console.error('データ保存エラー:', error);
+            }
+        }
+
+        function updateDashboard() {
+            try {
+                const pendingOrders = orders.filter(o => o.status === 'pending');
+                const totalWeight = orders.reduce((sum, order) => sum + (order.totalWeight || 0), 0);
+                const urgentOrders = orders.filter(o => {
+                    const deliveryDate = new Date(o.deliveryDate);
+                    const today = new Date();
+                    const daysDiff = (deliveryDate - today) / (1000 * 60 * 60 * 24);
+                    return daysDiff <= 7 && o.status !== 'completed';
+                });
+
+                document.getElementById('pendingOrdersCount').textContent = pendingOrders.length;
+                document.getElementById('totalWeightValue').textContent = totalWeight.toFixed(1) + 'kg';
+                document.getElementById('urgentOrdersCount').textContent = urgentOrders.length;
+                document.getElementById('totalOrdersCount').textContent = orders.length;
+                console.log('ダッシュボード更新完了');
+            } catch (error) {
+                console.error('ダッシュボード更新エラー:', error);
+            }
+        }
+
+        function updateTable() {
+            try {
+                const tbody = document.getElementById('ordersTableBody');
+                if (!tbody) return;
+                
+                tbody.innerHTML = '';
+
+                filteredOrders.forEach(order => {
+                    const row = document.createElement('tr');
+
+                    const deliveryDate = new Date(order.deliveryDate);
+                    const today = new Date();
+                    const daysDiff = (deliveryDate - today) / (1000 * 60 * 60 * 24);
+                    const isUrgent = daysDiff <= 7 && order.status !== 'completed';
+
+                    if (isUrgent) row.classList.add('urgent-row');
+
+                    if (order.material === 'S14') row.classList.add('s14-material');
+                    else if (order.material === 'SCS') row.classList.add('scs-material');
+                    else if (order.material === 'SUS304') row.classList.add('sus304-material');
+
+                    const statusBadge = getStatusBadge(order.status);
+                    const materialClass = `material-${order.material.toLowerCase()}`;
+
+                    row.innerHTML = `
+                        <td>${order.customer || '-'}</td>
+                        <td>${order.orderNumber}</td>
+                        <td>${order.productCode}</td>
+                        <td>${order.productName}</td>
+                        <td><span class="${materialClass}">${order.material}</span></td>
+                        <td>${order.unitWeight}kg</td>
+                        <td>${order.quantity}</td>
+                        <td><strong>${order.totalWeight}kg</strong></td>
+                        <td>${order.orderDate ? formatDate(order.orderDate) : '-'}</td>
+                        <td>${formatDate(order.deliveryDate)} ${isUrgent ? '<i class="bi bi-exclamation-triangle text-danger"></i>' : ''}</td>
+                        <td>${statusBadge}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="editOrder('${order.id}')" title="編集">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="deleteOrder('${order.id}')" title="削除">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                const displayCountElement = document.getElementById('displayCount');
+                if (displayCountElement) {
+                    displayCountElement.textContent = `${filteredOrders.length}件表示`;
+                }
+                console.log('テーブル更新完了');
+            } catch (error) {
+                console.error('テーブル更新エラー:', error);
+            }
+        }
+
+        // 補助関数
+        function getStatusBadge(status) {
+            const styles = {
+                pending: 'bg-orange-500 text-white',
+                processing: 'bg-blue-500 text-white',
+                completed: 'bg-green-500 text-white'
+            };
+            
+            const labels = {
+                pending: '未着手',
+                processing: '進行中',
+                completed: '完了'
+            };
+
+            return `<span class="badge ${styles[status] || 'bg-gray-500 text-white'}">${labels[status] || status}</span>`;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('ja-JP');
+            } catch (error) {
+                return dateStr;
+            }
+        }
+
         // === PDF機能（グローバル関数） ===
         let currentPDF = null;
         let currentPage = 1;
@@ -2182,90 +2300,7 @@
             console.log('ステンレス鋳造管理システム完全版 起動完了');
         });
 
-        function saveData() {
-            localStorage.setItem('castingOrders', JSON.stringify(orders));
-        }
-
-        function updateDashboard() {
-            const pendingOrders = orders.filter(o => o.status === 'pending');
-            const totalWeight = orders.reduce((sum, order) => sum + (order.totalWeight || 0), 0);
-
-            const urgentOrders = orders.filter(order => {
-                const deliveryDate = new Date(order.deliveryDate);
-                const today = new Date();
-                const daysDiff = (deliveryDate - today) / (1000 * 60 * 60 * 24);
-                return daysDiff <= 7 && order.status !== 'completed';
-            });
-
-            document.getElementById('orderCount').textContent = pendingOrders.length;
-            document.getElementById('totalWeight').textContent = totalWeight.toFixed(1) + ' kg';
-            document.getElementById('urgentCount').textContent = urgentOrders.length;
-            document.getElementById('batchCount').textContent = Math.ceil(totalWeight / 300);
-        }
-
-        function updateTable() {
-            const tbody = document.getElementById('ordersTableBody');
-            tbody.innerHTML = '';
-
-            filteredOrders.forEach(order => {
-                const row = document.createElement('tr');
-
-                const deliveryDate = new Date(order.deliveryDate);
-                const today = new Date();
-                const daysDiff = (deliveryDate - today) / (1000 * 60 * 60 * 24);
-                const isUrgent = daysDiff <= 7 && order.status !== 'completed';
-
-                if (isUrgent) row.classList.add('urgent-row');
-
-                if (order.material === 'S14') row.classList.add('s14-material');
-                else if (order.material === 'SCS') row.classList.add('scs-material');
-                else if (order.material === 'SUS304') row.classList.add('sus304-material');
-
-                const statusBadge = getStatusBadge(order.status);
-                const materialClass = `material-${order.material.toLowerCase()}`;
-
-                row.innerHTML = `
-                    <td>${order.customer || '-'}</td>
-                    <td>${order.orderNumber}</td>
-                    <td>${order.productCode}</td>
-                    <td>${order.productName}</td>
-                    <td><span class="${materialClass}">${order.material}</span></td>
-                    <td>${order.unitWeight}kg</td>
-                    <td>${order.quantity}</td>
-                    <td><strong>${order.totalWeight}kg</strong></td>
-                    <td>${order.orderDate ? formatDate(order.orderDate) : '-'}</td>
-                    <td>${formatDate(order.deliveryDate)} ${isUrgent ? '<i class="bi bi-exclamation-triangle text-danger"></i>' : ''}</td>
-                    <td>${statusBadge}</td>
-                    <td>
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary" onclick="editOrder('${order.id}')" title="編集">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-outline-danger" onclick="deleteOrder('${order.id}')" title="削除">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-
-            document.getElementById('displayCount').textContent = `${filteredOrders.length}件表示`;
-        }
-
-        function getStatusBadge(status) {
-            const badges = {
-                'pending': '<span class="badge bg-warning">未処理</span>',
-                'processing': '<span class="badge bg-info">処理中</span>',
-                'completed': '<span class="badge bg-success">完了</span>'
-            };
-            return badges[status] || '<span class="badge bg-secondary">不明</span>';
-        }
-
-        function formatDate(dateStr) {
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('ja-JP');
-        }
+        // 重複する関数定義は削除済み（上部で定義済み）
 
         function applyFilters() {
             const materialFilter = document.getElementById('materialFilter').value;
