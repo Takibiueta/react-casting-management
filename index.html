@@ -20,6 +20,62 @@
         .material-sus304 { color: #ffc107; font-weight: bold; }
         .status-urgent { background: linear-gradient(45deg, #ff6b6b, #ffa500) !important; color: white; }
         .batch-result { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; border-radius: 8px; margin: 10px 0; }
+        
+        /* PDF自動入力フォーム用スタイル */
+        .auto-filled {
+            background-color: #e8f4f8 !important;
+            border-left: 3px solid #17a2b8 !important;
+            transition: all 0.3s ease;
+        }
+        
+        .auto-filled:focus {
+            background-color: #ffffff !important;
+            box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25) !important;
+        }
+        
+        .form-control.is-valid {
+            border-color: #198754;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='m2.3 6.73.4.4c.2.2.6.2.8 0l3.1-3.1c.2-.2.2-.6 0-.8L5.6 2.22c-.2-.2-.6-.2-.8 0l-1.8 1.8L1.7 2.7c-.2-.2-.6-.2-.8 0L.22 3.4c-.2.2-.2.6 0 .8l2.08 2.53z'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right calc(0.375em + 0.1875rem) center;
+            background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+        }
+        
+        .form-control.is-invalid {
+            border-color: #dc3545;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath d='m6 3v3m0 2h.01'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right calc(0.375em + 0.1875rem) center;
+            background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+        }
+        
+        .extraction-summary {
+            animation: slideIn 0.5s ease-in-out;
+        }
+        
+        .data-preview-table th {
+            width: 30%;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .data-preview-table td {
+            color: #6c757d;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .progress-animated .progress-bar {
+            animation: progressFill 1s ease-in-out;
+        }
+        
+        @keyframes progressFill {
+            from { width: 0%; }
+            to { width: var(--progress-width); }
+        }
     </style>
     
     <script>
@@ -225,6 +281,860 @@
             } else {
                 return `「${message}」についてお答えします。\n\n現在 ${orders.length}件の注文を管理中です。具体的な検索を行う場合は、以下のようにお聞きください：\n• 材質指定: "S14材を表示"\n• 緊急度: "緊急の注文は？"\n• 統計情報: "総重量を教えて"`;
             }
+        }
+
+        // === PDF機能（グローバル関数） ===
+        let currentPDF = null;
+        let currentPage = 1;
+
+        // PDFモーダル表示
+        function showPDFModal() {
+            resetPDFModal();
+            const modal = new bootstrap.Modal(document.getElementById('pdfModal'));
+            modal.show();
+        }
+
+        // PDFモーダルリセット
+        function resetPDFModal() {
+            const pdfFileInput = document.getElementById('pdfFileInput');
+            const pdfProcessingStatus = document.getElementById('pdfProcessingStatus');
+            const pdfPreview = document.getElementById('pdfPreview');
+            const extractedDataContainer = document.getElementById('extractedDataContainer');
+            const noDataMessage = document.getElementById('noDataMessage');
+            const extractedText = document.getElementById('extractedText');
+            const addFromPDFBtn = document.getElementById('addFromPDFBtn');
+            const pdfExtractedForm = document.getElementById('pdfExtractedForm');
+
+            if (pdfFileInput) pdfFileInput.value = '';
+            if (pdfProcessingStatus) pdfProcessingStatus.classList.add('d-none');
+            if (pdfPreview) pdfPreview.classList.add('d-none');
+            if (extractedDataContainer) extractedDataContainer.classList.add('d-none');
+            if (noDataMessage) noDataMessage.classList.remove('d-none');
+            if (extractedText) extractedText.value = '';
+            if (addFromPDFBtn) addFromPDFBtn.disabled = true;
+            if (pdfExtractedForm) pdfExtractedForm.reset();
+
+            currentPDF = null;
+            currentPage = 1;
+        }
+
+        // PDFファイル選択処理
+        async function handlePDFFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type !== 'application/pdf') {
+                alert('PDFファイルを選択してください。');
+                return;
+            }
+
+            try {
+                // 処理中表示
+                const pdfProcessingStatus = document.getElementById('pdfProcessingStatus');
+                const noDataMessage = document.getElementById('noDataMessage');
+                
+                if (pdfProcessingStatus) pdfProcessingStatus.classList.remove('d-none');
+                if (noDataMessage) noDataMessage.classList.add('d-none');
+
+                // PDF.jsの確認と設定
+                if (typeof pdfjsLib === 'undefined') {
+                    throw new Error('PDF.jsライブラリが読み込まれていません');
+                }
+
+                // PDF.js Worker設定（警告解消）
+                if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                }
+
+                // PDFを読み込み
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                currentPDF = pdf;
+
+                // 最初のページを表示
+                await renderPDFPage(1);
+
+                // テキスト抽出
+                const extractedTextContent = await extractTextFromPDF(pdf);
+                const extractedText = document.getElementById('extractedText');
+                if (extractedText) extractedText.value = extractedTextContent;
+
+                // データ抽出
+                const extractedData = extractDataFromText(extractedTextContent);
+                populateExtractedData(extractedData);
+
+                // UI更新
+                if (pdfProcessingStatus) pdfProcessingStatus.classList.add('d-none');
+                const pdfPreview = document.getElementById('pdfPreview');
+                const extractedDataContainer = document.getElementById('extractedDataContainer');
+                
+                if (pdfPreview) pdfPreview.classList.remove('d-none');
+                if (extractedDataContainer) extractedDataContainer.classList.remove('d-none');
+                if (noDataMessage) noDataMessage.classList.add('d-none');
+
+                // フォーム監視機能を初期化
+                setupFormWatchers();
+
+            } catch (error) {
+                console.error('PDF処理エラー:', error);
+                alert('PDFの処理中にエラーが発生しました：' + error.message);
+                const pdfProcessingStatus = document.getElementById('pdfProcessingStatus');
+                if (pdfProcessingStatus) pdfProcessingStatus.classList.add('d-none');
+            }
+        }
+
+        // PDFページレンダリング
+        async function renderPDFPage(pageNumber) {
+            if (!currentPDF) return;
+
+            try {
+                const page = await currentPDF.getPage(pageNumber);
+                const canvas = document.getElementById('pdfCanvas');
+                if (!canvas) return;
+                
+                const context = canvas.getContext('2d');
+                const containerWidth = canvas.parentElement.clientWidth - 40;
+                const viewport = page.getViewport({ scale: 1 });
+                const scale = containerWidth / viewport.width;
+                const scaledViewport = page.getViewport({ scale: scale });
+
+                canvas.width = scaledViewport.width;
+                canvas.height = scaledViewport.height;
+
+                await page.render({
+                    canvasContext: context,
+                    viewport: scaledViewport
+                }).promise;
+
+                const pdfPageInfo = document.getElementById('pdfPageInfo');
+                if (pdfPageInfo) {
+                    pdfPageInfo.textContent = `${pageNumber} / ${currentPDF.numPages}`;
+                }
+
+            } catch (error) {
+                console.error('ページレンダリングエラー:', error);
+            }
+        }
+
+        // PDFテキスト抽出
+        async function extractTextFromPDF(pdf) {
+            let fullText = '';
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                try {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + '\n';
+                } catch (error) {
+                    console.error(`ページ ${i} のテキスト抽出エラー:`, error);
+                }
+            }
+
+            return fullText.trim();
+        }
+
+        // 改善されたデータ抽出機能
+        function extractDataFromText(text) {
+            const data = {
+                orderNumber: '',
+                customer: '',
+                productCode: '',
+                productName: '',
+                material: '',
+                unitWeight: '',
+                quantity: '',
+                deliveryDate: '',
+                notes: ''
+            };
+
+            try {
+                console.log('=== PDF解析開始 ===');
+                console.log('抽出テキスト（全体）:', text.substring(0, 1000) + '...');
+                console.log('テキスト長:', text.length);
+                
+                // 行別デバッグ出力
+                const lines = text.split('\n');
+                console.log('行数:', lines.length);
+                lines.forEach((line, index) => {
+                    if (line.trim() && index < 20) { // 最初の20行のみ表示
+                        console.log(`行${index + 1}: "${line}"`);
+                    }
+                });
+
+                // 1. 注文番号抽出 - 受注番号、注文番号の様々なパターン
+                const orderPatterns = [
+                    /受注N[09][:：]?\s*(\d+)/i,                    // 受注N9：12345
+                    /受注番号[:：]\s*([A-Z0-9\-]+)/i,              // 受注番号：ABC123
+                    /注文番?号[:：\s]*([A-Z0-9\-]+)/i,             // 注文番号：123-456
+                    /Order\s*No\.?\s*[:：]?\s*([A-Z0-9\-]+)/i,    // Order No: ORD123
+                    /発注番?号[:：\s]*([A-Z0-9\-\s]+)/i,           // 発注番号：39 83 81 (スペース含む)
+                    /発注№[:：\s]*([A-Z0-9\-\s]+)/i,               // 発注№：39 83 81
+                    /NO\.?\s*[:：]?\s*([A-Z0-9\-]+)/i,            // NO: 123456
+                    /管理番号[:：\s]*([A-Z0-9\-]+)/i,              // 管理番号：MGT123
+                    /([0-9]{8})/g,                                // 8桁の数字 (00000142)
+                    /([0-9]{2}\s+[0-9]{2}\s+[0-9]{2})/g,         // スペース区切りの番号 (39 83 81)
+                    /(\d{8})/g,                                   // 8桁連続数字の改良版
+                    /([0-9]+\s+[0-9]+\s+[0-9]+)/g,               // 複数桁スペース区切り番号
+                    /^[\s]*([0-9]{8,})[\s]*$/m,                  // 行頭から8桁以上の数字
+                    /発注\s*№?\s*[:：]?\s*([A-Z0-9\-\s]+?)[\s\n]/i, // 発注№の改良版
+                    /受注\s*N[Oo0]?\s*[:：]?\s*([A-Z0-9\-\s]+?)[\s\n]/i // 受注No の改良版
+                ];
+                
+                for (let i = 0; i < orderPatterns.length; i++) {
+                    const pattern = orderPatterns[i];
+                    const match = text.match(pattern);
+                    if (match && match[1]) {
+                        data.orderNumber = match[1].trim();
+                        console.log(`注文番号抽出（パターン${i+1}）:`, data.orderNumber, 'マッチ:', match[0]);
+                        break;
+                    } else if (i < 5) { // 最初の5パターンのみデバッグ出力
+                        console.log(`注文番号パターン${i+1}マッチなし:`, pattern);
+                    }
+                }
+
+                // 2. 発注者抽出 - 注文者、発注者、会社名
+                const customerPatterns = [
+                    /注文者[:：\s]*([^\n\r\s]+(?:\s+[^\n\r\s]+)*)/i,      // 注文者：会社名
+                    /発注者[:：\s]*([^\n\r\s]+(?:\s+[^\n\r\s]+)*)/i,      // 発注者：会社名
+                    /会社名[:：\s]*([^\n\r\s]+(?:\s+[^\n\r\s]+)*)/i,      // 会社名：会社名
+                    /御発注[:：\s]*([^\n\r\s]+(?:\s+[^\n\r\s]+)*)/i,      // 御発注：会社名
+                    /(株式会社[^\s\n\r]+)/i,                             // 株式会社XXX
+                    /(有限会社[^\s\n\r]+)/i,                             // 有限会社XXX
+                    /([^\s\n\r]*工業[^\s\n\r]*)/i,                       // XXX工業
+                    /([^\s\n\r]*製作所[^\s\n\r]*)/i                      // XXX製作所
+                ];
+                
+                for (const pattern of customerPatterns) {
+                    const match = text.match(pattern);
+                    if (match && match[1]) {
+                        data.customer = match[1].trim();
+                        console.log('発注者抽出:', data.customer);
+                        break;
+                    }
+                }
+
+                // 3. 品番抽出 - 英数字の組み合わせ（例：7-B7912-ｼ）
+                const productCodePatterns = [
+                    /品番[:：\s]*([A-Z0-9\-ｼ]+)/i,                       // 品番：7-B7912-2
+                    /型番[:：\s]*([A-Z0-9\-ｼ]+)/i,                       // 型番：ABC-123
+                    /Part\s*No\.?\s*[:：]?\s*([A-Z0-9\-ｼ]+)/i,          // Part No: 123-456
+                    /製品番号[:：\s]*([A-Z0-9\-ｼ]+)/i,                   // 製品番号：PRD123
+                    /品目\s*\(\s*([0-9]+\-[A-Z]+[0-9]+[\-ｼ]*[0-9]*)\s*\)/i, // 品目 (7-B7912-ｼ) 形式
+                    /([0-9]+\-[A-Z]+[0-9]+[\-ｼ]*[0-9]*)/g,              // 7-B7912-2 または 7-B7912-ｼ 形式
+                    /([A-Z]+[0-9]+\-[0-9]+\-[0-9]+)/g,                   // ABC123-45-6 形式
+                    /([A-Z]+\-[0-9]+\-[A-Z0-9]+)/g,                      // ABC-123-XYZ 形式
+                    /(P[0-9]+\-[0-9]+\-[0-9]+)/g,                        // P815-110-0162 形式
+                    /(7\-B7\s*9\s*12[\-ｼ]*)/g,                          // スペース入りパターン 7-B7 9 12-ｼ
+                    /([0-9]+[\-\s]*[A-Z]+[0-9]+[\-\s]*ｼ)/i,             // 7-B7912-ｼ のような特殊文字含む
+                    /^[\s]*([0-9]+\-[A-Z]+[0-9]+[\-ｼ]+[0-9]*)[\s]*$/m   // 行独立の品番パターン
+                ];
+                
+                for (let i = 0; i < productCodePatterns.length; i++) {
+                    const pattern = productCodePatterns[i];
+                    const match = text.match(pattern);
+                    if (match && match[1]) {
+                        data.productCode = match[1].trim();
+                        console.log(`品番抽出（パターン${i+1}）:`, data.productCode, 'マッチ:', match[0]);
+                        break;
+                    } else if (i < 5) { // 最初の5パターンのみデバッグ出力
+                        console.log(`品番パターン${i+1}マッチなし:`, pattern);
+                    }
+                }
+
+                // 4. 品名抽出 - 品番の近くにある日本語名称
+                const productNamePatterns = [
+                    /品名[:：\s]*([^\n\r]+)/i,                           // 品名：コネクタ VLN-15
+                    /製品名[:：\s]*([^\n\r]+)/i,                         // 製品名：フランジ
+                    /部品名[:：\s]*([^\n\r]+)/i,                         // 部品名：ボルト
+                    /名称[:：\s]*([^\n\r]+)/i,                           // 名称：ガスケット
+                    /品目[^(]*\([^)]*\)\s*\*?\s*([ｱ-ﾝｼﾘﾝﾀﾞ][^【\n\r]*)/i, // 品目 (7-B7912-ｼ) * ｼﾘﾝﾀﾞ(ﾍｲｶﾞﾜ)
+                    /(ｼﾘﾝﾀﾞ[^【\n\r]*\([^)]*\))/i,                      // ｼﾘﾝﾀﾞ(ﾍｲｶﾞﾜ) 改良版
+                    /(ｼﾘﾝﾀﾞ[^【\n\r]*)/i,                              // ｼﾘﾝﾀﾞXXX
+                    /(コネクタ[^\n\r]*)/i,                               // コネクタ XXX
+                    /(フランジ[^\n\r]*)/i,                               // フランジ XXX
+                    /(ボルト[^\n\r]*)/i,                                 // ボルト XXX
+                    /(ナット[^\n\r]*)/i,                                 // ナット XXX
+                    /(ガスケット[^\n\r]*)/i,                             // ガスケット XXX
+                    /(継手[^\n\r]*)/i,                                   // 継手 XXX
+                    /(バルブ[^\n\r]*)/i,                                 // バルブ XXX
+                    /(シリンダ[^\n\r]*)/i,                               // シリンダ XXX
+                    /\*\s*([ｱ-ﾝ][ｱ-ﾝ\(\)]+)/i,                        // * ｼﾘﾝﾀﾞ(ﾍｲｶﾞﾜ) のような場合
+                    /([ｱ-ﾝ]+\([ｱ-ﾝ]+\))/i                              // カタカナ名(カタカナ) パターン
+                ];
+                
+                for (let i = 0; i < productNamePatterns.length; i++) {
+                    const pattern = productNamePatterns[i];
+                    const match = text.match(pattern);
+                    if (match && match[1]) {
+                        data.productName = match[1].trim();
+                        console.log(`品名抽出（パターン${i+1}）:`, data.productName, 'マッチ:', match[0]);
+                        break;
+                    } else if (i < 5) { // 最初の5パターンのみデバッグ出力
+                        console.log(`品名パターン${i+1}マッチなし:`, pattern);
+                    }
+                }
+
+                // 5. 材質抽出 - S13, S14, SCM435, SUS304, FCD400等
+                const materials = [
+                    'S13', 'S14', 'S15', 'SCM435', 'SCM440', 'SUS304', 'SUS316', 'SUS430',
+                    'SCS13', 'SCS14', 'SCS16', 'SCS1', 'SCS2', 'SCS3', 'SCS5', 'SCS6',
+                    'FC200', 'FC250', 'FCD400', 'FCD450', 'FCD500', 'SS400', 'SM490',
+                    'A5052', 'A6061', 'A7075', 'C3604', 'C3771', 'FCD400-15'
+                ];
+                
+                // 材質パターンを優先順で検索
+                const materialPatterns = [
+                    /材質[:：\s]*(S13|S14|S15|SCM435|SCM440|SUS304|SUS316|SUS430|SCS13|SCS14|SCS16|SCS1|SCS2|SCS3|SCS5|SCS6|FCD400[\-0-9]*)/i,
+                    /材料[:：\s]*(S13|S14|S15|SCM435|SCM440|SUS304|SUS316|SUS430|SCS13|SCS14|SCS16|SCS1|SCS2|SCS3|SCS5|SCS6|FCD400[\-0-9]*)/i,
+                    /【\s*(FCD400[\-0-9]*)\s*】/i,                        // 【FCD400-15】形式
+                    /(FCD400[\-0-9]+)/i,                                 // FCD400-15 直接マッチ
+                    /\[\s*(FCD400[\-0-9]*)\s*\]/i,                       // [FCD400-15]形式
+                    /^[\s]*【\s*(FCD400[\-0-9]*)\s*】[\s]*$/m,           // 行独立の【材質】パターン
+                    /\s+(FCD400[\-0-9]+)\s+/i,                           // スペースに囲まれた材質
+                    /質\s*[\(（]\s*(FCD400[\-0-9]*)\s*[\)）]/i,          // 質(FCD400-15)パターン
+                    /^[\s]*(FCD[0-9]+[\-0-9]*)[\s]*$/m                   // 行独立のFCD材質
+                ];
+                
+                for (let i = 0; i < materialPatterns.length; i++) {
+                    const pattern = materialPatterns[i];
+                    const match = text.match(pattern);
+                    if (match && match[1]) {
+                        data.material = match[1].toUpperCase();
+                        console.log(`材質抽出（パターン${i+1}）:`, data.material, 'マッチ:', match[0]);
+                        break;
+                    } else if (i < 5) { // 最初の5パターンのみデバッグ出力
+                        console.log(`材質パターン${i+1}マッチなし:`, pattern);
+                    }
+                }
+                
+                // パターンマッチで見つからない場合は単語検索
+                if (!data.material) {
+                    for (const material of materials) {
+                        if (text.toUpperCase().includes(material)) {
+                            data.material = material;
+                            console.log('材質抽出（キーワード検索）:', data.material);
+                            break;
+                        }
+                    }
+                }
+
+                // 6. 重量抽出 - "重量" "kg" の前の数値（オプション）
+                const weightPatterns = [
+                    /重量[:：\s]*([0-9]+\.?[0-9]*)\s*kg/i,                // 重量：13.2kg
+                    /単重[:：\s]*([0-9]+\.?[0-9]*)\s*kg/i,                // 単重：13.2kg
+                    /重さ[:：\s]*([0-9]+\.?[0-9]*)\s*kg/i,                // 重さ：13.2kg
+                    /([0-9]+\.?[0-9]*)\s*kg/gi,                          // 13.2kg
+                    /([0-9]+\.?[0-9]*)\s*㎏/gi,                          // 29.5㎏
+                    /重量[:：\s]*([0-9]+\.?[0-9]*)/i,                     // 重量：13.2（単位なし）
+                    /単重[:：\s]*([0-9]+\.?[0-9]*)/i,                     // 単重：13.2（単位なし）
+                    /([0-9]+)\s*\.\s*([0-9]+)\s*㎏/i,                     // 2 9 .5㎏ (スペース入り)
+                    /([0-9]+\s*[0-9]*)\s*\.\s*([0-9]+)\s*㎏/i,            // 29 .5㎏ のような分離パターン
+                    /([0-9]{1,2})\s*\.\s*([0-9]+)\s*kg/gi,               // 29 .5kg の分離パターン
+                    /重量\s*[:：]?\s*([0-9]+[\.\s]*[0-9]*)\s*[kgcg㎏]/i  // 重量分離パターン
+                ];
+                
+                for (const pattern of weightPatterns) {
+                    const match = text.match(pattern);
+                    if (match && match[1]) {
+                        // スペース区切りの重量パターンの場合
+                        if (match[2]) {
+                            data.unitWeight = parseFloat(match[1] + '.' + match[2]);
+                        } else {
+                            data.unitWeight = parseFloat(match[1]);
+                        }
+                        console.log('重量抽出:', data.unitWeight);
+                        break;
+                    }
+                }
+
+                // 7. 数量抽出 - "数量" "個" "ケ" の前の数値
+                const quantityPatterns = [
+                    /数量[:：\s]*([0-9]+)/i,                             // 数量：2
+                    /個数[:：\s]*([0-9]+)/i,                             // 個数：2
+                    /qty[:：\s]*([0-9]+)/i,                              // qty：2
+                    /([0-9]+)\s*個/gi,                                   // 2個
+                    /([0-9]+)\s*ケ/gi,                                   // 2ケ
+                    /([0-9]+)\s*ヶ/gi,                                   // 2ヶ
+                    /([0-9]+)\s*pc/gi,                                   // 2pc
+                    /([0-9]+)\s*pcs/gi                                   // 2pcs
+                ];
+                
+                for (const pattern of quantityPatterns) {
+                    const match = text.match(pattern);
+                    if (match && match[1]) {
+                        data.quantity = parseInt(match[1]);
+                        console.log('数量抽出:', data.quantity);
+                        break;
+                    }
+                }
+
+                // 8. 納期抽出 - 日付形式（2025.06.05 → 2025/06/05）
+                const datePatterns = [
+                    /納期[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 納期：2025.06.05
+                    /納入[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i,  // 納入：2025.06.05
+                    /納入日[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i, // 納入日：2025.06.05
+                    /希望納期[:：\s]*([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/i, // 希望納期：2025.06.05
+                    /([0-9]{4})[.\-\/年]([0-9]{1,2})[.\-\/月]([0-9]{1,2})/g,              // 2025.06.05形式
+                    /([0-9]{4})[.\-\/]([0-9]{1,2})[.\-\/]([0-9]{1,2})/g                  // 2025/06/05形式
+                ];
+                
+                for (const pattern of datePatterns) {
+                    const match = text.match(pattern);
+                    if (match && match[1] && match[2] && match[3]) {
+                        const year = match[1];
+                        const month = match[2].padStart(2, '0');
+                        const day = match[3].padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        const date = new Date(dateStr);
+                        
+                        if (!isNaN(date.getTime()) && date.getFullYear() >= 2020 && date.getFullYear() <= 2030) {
+                            data.deliveryDate = dateStr;
+                            console.log('納期抽出:', data.deliveryDate);
+                            break;
+                        }
+                    }
+                }
+
+                // フォールバック抽出（特定のパターンに特化）
+                if (!data.orderNumber || !data.productCode || !data.productName || !data.material) {
+                    console.log('=== フォールバック抽出開始 ===');
+                    
+                    // より積極的な検索
+                    if (!data.orderNumber) {
+                        // 数字のみのパターンを探す（8桁の数字）
+                        const numberMatch = text.match(/\b([0-9]{8})\b/);
+                        if (numberMatch) {
+                            data.orderNumber = numberMatch[1];
+                            console.log('フォールバック注文番号:', data.orderNumber);
+                        }
+                    }
+                    
+                    if (!data.productCode) {
+                        // より緩い品番パターン
+                        const codeMatch = text.match(/([0-9]+\-[A-Z]+[0-9]+(?:\-?ｼ)?)/);
+                        if (codeMatch) {
+                            data.productCode = codeMatch[1];
+                            console.log('フォールバック品番:', data.productCode);
+                        }
+                    }
+                    
+                    if (!data.productName) {
+                        // カタカナのみのパターン
+                        const nameMatch = text.match(/(ｼﾘﾝﾀﾞ\([^)]+\))/);
+                        if (nameMatch) {
+                            data.productName = nameMatch[1];
+                            console.log('フォールバック品名:', data.productName);
+                        }
+                    }
+                    
+                    if (!data.material) {
+                        // FCD系の材質を探す
+                        const matMatch = text.match(/(FCD[0-9]+[\-0-9]*)/);
+                        if (matMatch) {
+                            data.material = matMatch[1];
+                            console.log('フォールバック材質:', data.material);
+                        }
+                    }
+                }
+
+                console.log('=== PDF解析結果 ===');
+                console.log('注文番号:', data.orderNumber);
+                console.log('発注者:', data.customer);
+                console.log('品番:', data.productCode);
+                console.log('品名:', data.productName);
+                console.log('材質:', data.material);
+                console.log('重量:', data.unitWeight);
+                console.log('数量:', data.quantity);
+                console.log('納期:', data.deliveryDate);
+
+            } catch (error) {
+                console.error('データ抽出エラー:', error);
+            }
+
+            return data;
+        }
+
+        // 改善されたフォーム自動入力機能
+        function populateExtractedData(data) {
+            console.log('=== フォーム自動入力開始 ===');
+            
+            // 抽出データの品質評価
+            const dataQuality = evaluateDataQuality(data);
+            console.log('データ品質評価:', dataQuality);
+
+            // フィールドマッピング定義（重量をオプションに変更）
+            const fieldMappings = [
+                { id: 'pdfOrderNumber', value: data.orderNumber, label: '注文番号', required: true },
+                { id: 'pdfCustomer', value: data.customer, label: '発注者', required: false },
+                { id: 'pdfProductCode', value: data.productCode, label: '品番', required: true },
+                { id: 'pdfProductName', value: data.productName, label: '品名', required: true },
+                { id: 'pdfMaterial', value: data.material, label: '材質', required: true },
+                { id: 'pdfUnitWeight', value: data.unitWeight, label: '単重量', required: false }, // 重量をオプションに変更
+                { id: 'pdfQuantity', value: data.quantity, label: '数量', required: true },
+                { id: 'pdfDeliveryDate', value: data.deliveryDate, label: '納期', required: true },
+                { id: 'pdfNotes', value: data.notes, label: '備考', required: false }
+            ];
+
+            // フォームフィールドに値を設定
+            let filledCount = 0;
+            let requiredFilledCount = 0;
+            let totalRequiredCount = 0;
+
+            fieldMappings.forEach(mapping => {
+                const element = document.getElementById(mapping.id);
+                if (element) {
+                    // 既存値のクリア
+                    element.value = '';
+                    element.classList.remove('is-valid', 'is-invalid', 'auto-filled');
+
+                    if (mapping.value !== null && mapping.value !== undefined && mapping.value !== '') {
+                        // 値の設定
+                        element.value = mapping.value;
+                        filledCount++;
+                        
+                        // 視覚的フィードバック追加
+                        element.classList.add('auto-filled');
+                        
+                        // バリデーション表示
+                        if (validateFieldValue(mapping.id, mapping.value)) {
+                            element.classList.add('is-valid');
+                        } else {
+                            element.classList.add('is-invalid');
+                        }
+
+                        if (mapping.required) {
+                            requiredFilledCount++;
+                        }
+
+                        console.log(`✓ ${mapping.label}: "${mapping.value}"`);
+                    } else {
+                        console.log(`✗ ${mapping.label}: 未抽出`);
+                        if (mapping.required) {
+                            element.classList.add('is-invalid');
+                        }
+                    }
+
+                    if (mapping.required) {
+                        totalRequiredCount++;
+                    }
+                }
+            });
+
+            // 総重量の自動計算
+            calculateTotalWeight();
+
+            // 抽出結果サマリー表示
+            showExtractionSummary(filledCount, requiredFilledCount, totalRequiredCount, dataQuality);
+
+            // フォーム状態の更新
+            updateFormState(requiredFilledCount, totalRequiredCount);
+
+            // プレビュー機能の更新
+            updateDataPreview(data, dataQuality);
+
+            console.log(`=== フォーム自動入力完了 ===`);
+            console.log(`入力項目: ${filledCount}/9`);
+            console.log(`必須項目: ${requiredFilledCount}/${totalRequiredCount}`);
+        }
+
+        // データ品質評価関数
+        function evaluateDataQuality(data) {
+            const quality = {
+                score: 0,
+                maxScore: 8,
+                details: {},
+                level: '',
+                color: ''
+            };
+
+            // 各項目の品質評価
+            const evaluations = [
+                { key: 'orderNumber', weight: 2, check: (val) => val && val.length >= 3 },
+                { key: 'customer', weight: 1, check: (val) => val && val.length >= 2 },
+                { key: 'productCode', weight: 2, check: (val) => val && /[A-Z0-9\-]/.test(val) },
+                { key: 'productName', weight: 1, check: (val) => val && val.length >= 2 },
+                { key: 'material', weight: 1, check: (val) => val && val.length >= 2 },
+                { key: 'unitWeight', weight: 1, check: (val) => val && val > 0 },
+                { key: 'quantity', weight: 1, check: (val) => val && val > 0 },
+                { key: 'deliveryDate', weight: 1, check: (val) => val && new Date(val).getTime() > Date.now() }
+            ];
+
+            evaluations.forEach(eval => {
+                const value = data[eval.key];
+                const isValid = eval.check(value);
+                quality.details[eval.key] = {
+                    valid: isValid,
+                    value: value,
+                    weight: eval.weight
+                };
+                if (isValid) {
+                    quality.score += eval.weight;
+                }
+            });
+
+            // 品質レベル判定
+            const percentage = (quality.score / quality.maxScore) * 100;
+            if (percentage >= 80) {
+                quality.level = '優秀';
+                quality.color = 'success';
+            } else if (percentage >= 60) {
+                quality.level = '良好';
+                quality.color = 'info';
+            } else if (percentage >= 40) {
+                quality.level = '普通';
+                quality.color = 'warning';
+            } else {
+                quality.level = '要確認';
+                quality.color = 'danger';
+            }
+
+            return quality;
+        }
+
+        // フィールド値のバリデーション
+        function validateFieldValue(fieldId, value) {
+            switch (fieldId) {
+                case 'pdfOrderNumber':
+                    return value && value.toString().length >= 3;
+                case 'pdfProductCode':
+                    return value && /[A-Z0-9\-]/.test(value);
+                case 'pdfProductName':
+                    return value && value.toString().length >= 2;
+                case 'pdfMaterial':
+                    return value && value.toString().length >= 2;
+                case 'pdfUnitWeight':
+                    return value && !isNaN(value) && parseFloat(value) > 0;
+                case 'pdfQuantity':
+                    return value && !isNaN(value) && parseInt(value) > 0;
+                case 'pdfDeliveryDate':
+                    return value && new Date(value).getTime() > Date.now() - (24 * 60 * 60 * 1000);
+                default:
+                    return true;
+            }
+        }
+
+        // 総重量の自動計算
+        function calculateTotalWeight() {
+            const unitWeight = parseFloat(document.getElementById('pdfUnitWeight')?.value) || 0;
+            const quantity = parseInt(document.getElementById('pdfQuantity')?.value) || 0;
+            const totalWeight = unitWeight * quantity;
+
+            // 総重量表示エリアの更新（存在する場合）
+            const totalWeightDisplay = document.getElementById('pdfTotalWeight');
+            if (totalWeightDisplay) {
+                totalWeightDisplay.textContent = totalWeight.toFixed(1) + 'kg';
+            }
+
+            return totalWeight;
+        }
+
+        // 抽出結果サマリー表示
+        function showExtractionSummary(filledCount, requiredFilledCount, totalRequiredCount, dataQuality) {
+            // サマリー表示エリアの作成/更新
+            let summaryElement = document.getElementById('extractionSummary');
+            if (!summaryElement) {
+                summaryElement = document.createElement('div');
+                summaryElement.id = 'extractionSummary';
+                summaryElement.className = 'alert mt-3';
+                
+                // 抽出テキストエリアの前に挿入
+                const extractedTextCard = document.querySelector('#extractedText').closest('.card');
+                extractedTextCard.parentNode.insertBefore(summaryElement, extractedTextCard);
+            }
+
+            const percentage = Math.round((dataQuality.score / dataQuality.maxScore) * 100);
+            
+            summaryElement.className = `alert alert-${dataQuality.color} mt-3`;
+            summaryElement.innerHTML = `
+                <h6><i class="bi bi-clipboard-data"></i> 抽出結果サマリー</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-1"><strong>入力項目:</strong> ${filledCount}/9 項目</p>
+                        <p class="mb-1"><strong>必須項目:</strong> ${requiredFilledCount}/${totalRequiredCount} 項目</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-1"><strong>データ品質:</strong> 
+                            <span class="badge bg-${dataQuality.color}">${dataQuality.level}</span> 
+                            (${percentage}%)
+                        </p>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-${dataQuality.color}" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                </div>
+                ${requiredFilledCount < totalRequiredCount ? 
+                    '<small class="text-muted"><i class="bi bi-exclamation-triangle"></i> 未入力の必須項目があります。手動で入力してください。</small>' : 
+                    '<small class="text-success"><i class="bi bi-check-circle"></i> すべての必須項目が入力されています。</small>'
+                }
+            `;
+        }
+
+        // フォーム状態の更新
+        function updateFormState(requiredFilledCount, totalRequiredCount) {
+            const addButton = document.getElementById('addFromPDFBtn');
+            if (addButton) {
+                const canSubmit = requiredFilledCount === totalRequiredCount;
+                addButton.disabled = !canSubmit;
+                
+                if (canSubmit) {
+                    addButton.innerHTML = '<i class="bi bi-plus-circle"></i> 注文として追加';
+                    addButton.className = 'btn btn-success';
+                } else {
+                    addButton.innerHTML = '<i class="bi bi-exclamation-triangle"></i> 必須項目を入力してください';
+                    addButton.className = 'btn btn-warning';
+                }
+            }
+        }
+
+        // データプレビュー更新
+        function updateDataPreview(data, dataQuality) {
+            // プレビューエリアの作成/更新
+            let previewElement = document.getElementById('dataPreview');
+            if (!previewElement) {
+                previewElement = document.createElement('div');
+                previewElement.id = 'dataPreview';
+                previewElement.className = 'mt-3';
+                
+                // 抽出データフォームの後に挿入
+                const formContainer = document.getElementById('extractedDataContainer');
+                formContainer.appendChild(previewElement);
+            }
+
+            const totalWeight = calculateTotalWeight();
+            const isComplete = Object.values(data).filter(v => v !== null && v !== undefined && v !== '').length >= 6;
+
+            previewElement.innerHTML = `
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0"><i class="bi bi-eye"></i> データプレビュー</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-sm">
+                                    <tr><th>注文番号:</th><td>${data.orderNumber || '未入力'}</td></tr>
+                                    <tr><th>発注者:</th><td>${data.customer || '未入力'}</td></tr>
+                                    <tr><th>品番:</th><td>${data.productCode || '未入力'}</td></tr>
+                                    <tr><th>品名:</th><td>${data.productName || '未入力'}</td></tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm">
+                                    <tr><th>材質:</th><td>${data.material || '未入力'}</td></tr>
+                                    <tr><th>単重量:</th><td>${data.unitWeight ? data.unitWeight + 'kg' : '未入力'}</td></tr>
+                                    <tr><th>数量:</th><td>${data.quantity || '未入力'}</td></tr>
+                                    <tr><th>総重量:</th><td class="fw-bold text-primary">${totalWeight > 0 ? totalWeight.toFixed(1) + 'kg' : '未計算'}</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <table class="table table-sm">
+                                    <tr><th>納期:</th><td>${data.deliveryDate || '未入力'}</td></tr>
+                                    <tr><th>備考:</th><td>${data.notes || '(なし)'}</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="text-center">
+                            ${isComplete ? 
+                                '<span class="badge bg-success"><i class="bi bi-check-circle"></i> 登録準備完了</span>' : 
+                                '<span class="badge bg-warning"><i class="bi bi-pencil"></i> 手動入力が必要</span>'
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // フォームフィールドの変更監視（リアルタイム更新）
+        function setupFormWatchers() {
+            const watchFields = ['pdfOrderNumber', 'pdfCustomer', 'pdfProductCode', 'pdfProductName', 
+                               'pdfMaterial', 'pdfUnitWeight', 'pdfQuantity', 'pdfDeliveryDate', 'pdfNotes'];
+            
+            watchFields.forEach(fieldId => {
+                const element = document.getElementById(fieldId);
+                if (element) {
+                    element.addEventListener('input', function() {
+                        // リアルタイムバリデーション
+                        const isValid = validateFieldValue(fieldId, this.value);
+                        this.classList.remove('is-valid', 'is-invalid');
+                        if (this.value) {
+                            this.classList.add(isValid ? 'is-valid' : 'is-invalid');
+                        }
+
+                        // 重量計算の更新
+                        if (fieldId === 'pdfUnitWeight' || fieldId === 'pdfQuantity') {
+                            calculateTotalWeight();
+                        }
+
+                        // フォーム状態の更新
+                        updateFormStatusRealtime();
+                    });
+                }
+            });
+        }
+
+        // リアルタイムフォーム状態更新
+        function updateFormStatusRealtime() {
+            const requiredFields = ['pdfOrderNumber', 'pdfProductCode', 'pdfProductName', 
+                                  'pdfMaterial', 'pdfUnitWeight', 'pdfQuantity', 'pdfDeliveryDate'];
+            
+            let requiredFilledCount = 0;
+            requiredFields.forEach(fieldId => {
+                const element = document.getElementById(fieldId);
+                if (element && element.value && validateFieldValue(fieldId, element.value)) {
+                    requiredFilledCount++;
+                }
+            });
+
+            updateFormState(requiredFilledCount, requiredFields.length);
+        }
+
+        // PDF注文追加
+        function addOrderFromPDF() {
+            const orderNumber = document.getElementById('pdfOrderNumber')?.value.trim() || '';
+            const customer = document.getElementById('pdfCustomer')?.value.trim() || '';
+            const productCode = document.getElementById('pdfProductCode')?.value.trim() || '';
+            const productName = document.getElementById('pdfProductName')?.value.trim() || '';
+            const material = document.getElementById('pdfMaterial')?.value || '';
+            const unitWeight = parseFloat(document.getElementById('pdfUnitWeight')?.value) || 0;
+            const quantity = parseInt(document.getElementById('pdfQuantity')?.value) || 0;
+            const deliveryDate = document.getElementById('pdfDeliveryDate')?.value || '';
+            const notes = document.getElementById('pdfNotes')?.value.trim() || '';
+
+            if (!orderNumber || !productCode || !productName || !material || !unitWeight || !quantity || !deliveryDate) {
+                alert('必須項目を入力してください。');
+                return;
+            }
+
+            const newOrder = {
+                id: 'PDF-' + Date.now(),
+                orderNumber: orderNumber,
+                customer: customer,
+                productCode: productCode,
+                productName: productName,
+                material: material,
+                unitWeight: unitWeight,
+                quantity: quantity,
+                totalWeight: unitWeight * quantity,
+                deliveryDate: deliveryDate,
+                status: 'pending',
+                notes: notes + (notes ? '\n' : '') + '[PDF取込]'
+            };
+
+            orders.push(newOrder);
+            filteredOrders = [...orders];
+            
+            if (typeof saveData === 'function') saveData();
+            if (typeof updateDashboard === 'function') updateDashboard();
+            if (typeof updateTable === 'function') updateTable();
+
+            // モーダルを閉じる
+            const modal = bootstrap.Modal.getInstance(document.getElementById('pdfModal'));
+            if (modal) modal.hide();
+
+            alert(`注文 "${orderNumber}" をPDFから正常に追加しました。`);
         }
     </script>
 </head>
@@ -439,6 +1349,154 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
                     <button type="button" class="btn btn-success" onclick="saveNewOrder()"><i class="bi bi-check-circle"></i> 追加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF読み込みモーダル -->
+    <div class="modal fade" id="pdfModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-file-pdf text-danger"></i> PDF読み込み・データ抽出
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- PDF アップロード部分 -->
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h6><i class="bi bi-upload"></i> PDFファイル選択</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="pdfFileInput" class="form-label">PDFファイルを選択</label>
+                                        <input type="file" class="form-control" id="pdfFileInput" accept=".pdf" onchange="handlePDFFileSelect(event)">
+                                        <div class="form-text">
+                                            注文書・仕様書などのPDFファイルをアップロードしてください
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="pdfProcessingStatus" class="alert alert-info d-none">
+                                        <i class="bi bi-hourglass-split"></i> PDFを解析中...
+                                    </div>
+                                    
+                                    <div id="pdfPreview" class="border rounded p-3 bg-light d-none">
+                                        <h6>プレビュー</h6>
+                                        <canvas id="pdfCanvas" class="w-100"></canvas>
+                                        <div class="mt-2">
+                                            <small class="text-muted">ページ: <span id="pdfPageInfo">-</span></small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 抽出データ部分 -->
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h6><i class="bi bi-table"></i> 抽出データ</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="extractedDataContainer" class="d-none">
+                                        <form id="pdfExtractedForm">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-2">
+                                                        <label class="form-label">注文番号</label>
+                                                        <input type="text" class="form-control form-control-sm" id="pdfOrderNumber">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-2">
+                                                        <label class="form-label">発注者</label>
+                                                        <input type="text" class="form-control form-control-sm" id="pdfCustomer">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-2">
+                                                        <label class="form-label">品番</label>
+                                                        <input type="text" class="form-control form-control-sm" id="pdfProductCode">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-2">
+                                                        <label class="form-label">品名</label>
+                                                        <input type="text" class="form-control form-control-sm" id="pdfProductName">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <div class="mb-2">
+                                                        <label class="form-label">材質</label>
+                                                        <select class="form-select form-select-sm" id="pdfMaterial">
+                                                            <option value="">選択</option>
+                                                            <option value="S14">S14</option>
+                                                            <option value="SCS">SCS</option>
+                                                            <option value="SUS304">SUS304</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="mb-2">
+                                                        <label class="form-label">単重量(kg)</label>
+                                                        <input type="number" class="form-control form-control-sm" id="pdfUnitWeight" step="0.1">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="mb-2">
+                                                        <label class="form-label">数量</label>
+                                                        <input type="number" class="form-control form-control-sm" id="pdfQuantity">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label">納期</label>
+                                                <input type="date" class="form-control form-control-sm" id="pdfDeliveryDate">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label">備考</label>
+                                                <textarea class="form-control form-control-sm" id="pdfNotes" rows="2"></textarea>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    
+                                    <div id="noDataMessage" class="text-center text-muted">
+                                        <i class="bi bi-file-text fs-1"></i>
+                                        <p>PDFファイルを選択すると、データが自動抽出されます</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 抽出されたテキスト（デバッグ用） -->
+                    <div class="mt-3">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="bi bi-code"></i> 抽出テキスト（確認用）</h6>
+                            </div>
+                            <div class="card-body">
+                                <textarea id="extractedText" class="form-control" rows="4" readonly placeholder="PDFから抽出されたテキストがここに表示されます..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> キャンセル
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="addOrderFromPDF()" id="addFromPDFBtn" disabled>
+                        <i class="bi bi-plus-circle"></i> 注文として追加
+                    </button>
                 </div>
             </div>
         </div>
@@ -739,9 +1797,6 @@
             }
         }
 
-        function showPDFModal() {
-            alert('PDF読み取り機能：実装完了（モーダルは省略版）');
-        }
 
         function showExcelModal() {
             alert('Excel取込機能：実装完了（モーダルは省略版）');
