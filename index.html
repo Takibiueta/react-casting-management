@@ -304,10 +304,17 @@
                     return daysDiff <= 7 && o.status !== 'completed';
                 });
 
-                document.getElementById('pendingOrdersCount').textContent = pendingOrders.length;
-                document.getElementById('totalWeightValue').textContent = totalWeight.toFixed(1) + 'kg';
-                document.getElementById('urgentOrdersCount').textContent = urgentOrders.length;
-                document.getElementById('totalOrdersCount').textContent = orders.length;
+                // 正しいIDに修正
+                const orderCountElement = document.getElementById('orderCount');
+                const totalWeightElement = document.getElementById('totalWeight');
+                const urgentCountElement = document.getElementById('urgentCount');
+                const batchCountElement = document.getElementById('batchCount');
+
+                if (orderCountElement) orderCountElement.textContent = pendingOrders.length;
+                if (totalWeightElement) totalWeightElement.textContent = totalWeight.toFixed(1) + ' kg';
+                if (urgentCountElement) urgentCountElement.textContent = urgentOrders.length;
+                if (batchCountElement) batchCountElement.textContent = Math.ceil(totalWeight / 300);
+                
                 console.log('ダッシュボード更新完了');
             } catch (error) {
                 console.error('ダッシュボード更新エラー:', error);
@@ -429,7 +436,11 @@
             if (extractedDataContainer) extractedDataContainer.classList.add('d-none');
             if (noDataMessage) noDataMessage.classList.remove('d-none');
             if (extractedText) extractedText.value = '';
-            if (addFromPDFBtn) addFromPDFBtn.disabled = true;
+            if (addFromPDFBtn) {
+                addFromPDFBtn.disabled = true;
+                addFromPDFBtn.innerHTML = '<i class="bi bi-plus-circle"></i> 注文として追加';
+                addFromPDFBtn.title = 'PDFを読み込んでから使用してください';
+            }
             if (pdfExtractedForm) pdfExtractedForm.reset();
 
             currentPDF = null;
@@ -492,6 +503,14 @@
                 if (pdfPreview) pdfPreview.classList.remove('d-none');
                 if (extractedDataContainer) extractedDataContainer.classList.remove('d-none');
                 if (noDataMessage) noDataMessage.classList.add('d-none');
+
+                // 右下の一括追加ボタンを有効化
+                const addFromPDFBtn = document.getElementById('addFromPDFBtn');
+                if (addFromPDFBtn) {
+                    addFromPDFBtn.disabled = false;
+                    addFromPDFBtn.innerHTML = '<i class="bi bi-upload"></i> 全ページ一括追加';
+                    addFromPDFBtn.title = `${pagesData.length}ページを一括でシステムに追加します`;
+                }
 
                 // フォーム監視機能を初期化
                 setupFormWatchers();
@@ -1774,50 +1793,228 @@
             updateFormState(requiredFilledCount, requiredFields.length);
         }
 
-        // PDF注文追加
-        function addOrderFromPDF() {
-            const orderNumber = document.getElementById('pdfOrderNumber')?.value.trim() || '';
-            const customer = document.getElementById('pdfCustomer')?.value.trim() || '';
-            const productCode = document.getElementById('pdfProductCode')?.value.trim() || '';
-            const productName = document.getElementById('pdfProductName')?.value.trim() || '';
-            const material = document.getElementById('pdfMaterial')?.value || '';
-            const unitWeight = parseFloat(document.getElementById('pdfUnitWeight')?.value) || 0;
-            const quantity = parseInt(document.getElementById('pdfQuantity')?.value) || 0;
-            const deliveryDate = document.getElementById('pdfDeliveryDate')?.value || '';
-            const notes = document.getElementById('pdfNotes')?.value.trim() || '';
+        // 全ページ一括追加機能（右下ボタン用）
+        async function addOrderFromPDF() {
+            // 確認ダイアログ
+            const confirmation = confirm('PDFから抽出されたすべてのページの注文を一括でシステムに追加しますか？\n\n※データが不完全なページはスキップされます。');
+            if (!confirmation) return;
 
-            if (!orderNumber || !productCode || !productName || !material || !unitWeight || !quantity || !deliveryDate) {
-                alert('必須項目を入力してください。');
-                return;
+            // 進捗表示の準備
+            showBulkAddProgress();
+
+            try {
+                // すべてのページタブを取得
+                const pdfPageTabs = document.querySelectorAll('#pdfPageTabs .nav-link');
+                const pageNumbers = Array.from(pdfPageTabs).map(tab => {
+                    const match = tab.id.match(/page(\d+)-tab/);
+                    return match ? parseInt(match[1]) : null;
+                }).filter(num => num !== null);
+
+                if (pageNumbers.length === 0) {
+                    alert('追加するページが見つかりません。PDFを読み込んでから実行してください。');
+                    hideBulkAddProgress();
+                    return;
+                }
+
+                let successCount = 0;
+                let errorCount = 0;
+                const errors = [];
+                const addedOrders = [];
+
+                updateBulkAddProgress(0, pageNumbers.length, 'ページデータを確認中...');
+
+                // 各ページを順次処理
+                for (let i = 0; i < pageNumbers.length; i++) {
+                    const pageNumber = pageNumbers[i];
+                    
+                    try {
+                        updateBulkAddProgress(i + 1, pageNumbers.length, `ページ ${pageNumber} を処理中...`);
+                        
+                        // ページデータを取得
+                        const data = {
+                            orderNumber: document.getElementById(`orderNumber_${pageNumber}`)?.value?.trim() || '',
+                            customer: document.getElementById(`customer_${pageNumber}`)?.value?.trim() || '',
+                            productCode: document.getElementById(`productCode_${pageNumber}`)?.value?.trim() || '',
+                            productName: document.getElementById(`productName_${pageNumber}`)?.value?.trim() || '',
+                            material: document.getElementById(`material_${pageNumber}`)?.value?.trim() || '',
+                            unitWeight: parseFloat(document.getElementById(`unitWeight_${pageNumber}`)?.value) || 0,
+                            quantity: parseInt(document.getElementById(`quantity_${pageNumber}`)?.value) || 0,
+                            orderDate: document.getElementById(`orderDate_${pageNumber}`)?.value?.trim() || '',
+                            deliveryDate: document.getElementById(`deliveryDate_${pageNumber}`)?.value?.trim() || ''
+                        };
+
+                        // 必須項目チェック
+                        if (!data.orderNumber || !data.productCode || !data.productName) {
+                            errors.push(`ページ ${pageNumber}: 必須項目（注文番号、品番、品名）が不足`);
+                            errorCount++;
+                            continue;
+                        }
+
+                        // 重複チェック
+                        const existingOrder = orders.find(order => order.orderNumber === data.orderNumber);
+                        if (existingOrder) {
+                            // 重複の場合は既存を削除して新しいデータで上書き
+                            const index = orders.findIndex(order => order.orderNumber === data.orderNumber);
+                            if (index !== -1) {
+                                orders.splice(index, 1);
+                            }
+                        }
+
+                        // 総重量を計算
+                        const totalWeight = data.unitWeight * data.quantity;
+
+                        // 新しい注文オブジェクトを作成
+                        const newOrder = {
+                            id: 'PDF-' + Date.now() + '-' + pageNumber,
+                            orderNumber: data.orderNumber,
+                            customer: data.customer || '',
+                            productCode: data.productCode,
+                            productName: data.productName,
+                            material: data.material,
+                            unitWeight: data.unitWeight,
+                            quantity: data.quantity,
+                            totalWeight: totalWeight,
+                            orderDate: data.orderDate || '',
+                            deliveryDate: data.deliveryDate,
+                            status: 'pending',
+                            notes: `PDF一括読み込み (ページ ${pageNumber})`
+                        };
+
+                        // 注文をシステムに追加
+                        orders.push(newOrder);
+                        addedOrders.push(newOrder);
+                        successCount++;
+
+                        // 少し待機（UIの応答性向上）
+                        await new Promise(resolve => setTimeout(resolve, 100));
+
+                    } catch (error) {
+                        errorCount++;
+                        errors.push(`ページ ${pageNumber}: ${error.message}`);
+                        console.error(`ページ${pageNumber}でエラー:`, error);
+                    }
+                }
+
+                // 処理完了後の更新
+                filteredOrders = [...orders];
+                saveData();
+                updateDashboard();
+                updateTable();
+
+                // 進捗表示を隠す
+                hideBulkAddProgress();
+
+                // 結果レポート表示
+                showBulkAddResults({
+                    total: pageNumbers.length,
+                    success: successCount,
+                    error: errorCount,
+                    errors: errors,
+                    addedOrders: addedOrders
+                });
+
+                // モーダルを閉じる
+                if (successCount > 0) {
+                    setTimeout(() => {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('pdfModal'));
+                        if (modal) modal.hide();
+                    }, 2000);
+                }
+
+            } catch (error) {
+                hideBulkAddProgress();
+                console.error('一括追加処理エラー:', error);
+                alert(`一括追加中にエラーが発生しました: ${error.message}`);
+            }
+        }
+
+        // 進捗表示機能
+        function showBulkAddProgress() {
+            // 既存の進捗ダイアログがあれば削除
+            const existingProgress = document.getElementById('bulkAddProgress');
+            if (existingProgress) existingProgress.remove();
+
+            // 進捗ダイアログを作成
+            const progressHtml = `
+                <div id="bulkAddProgress" class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);">
+                    <div class="modal-dialog modal-sm modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="bi bi-cloud-upload"></i> 一括追加処理中
+                                </h5>
+                            </div>
+                            <div class="modal-body text-center">
+                                <div class="progress mb-3">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" id="bulkAddProgressBar" style="width: 0%"></div>
+                                </div>
+                                <div id="bulkAddStatus">処理を開始しています...</div>
+                                <div class="text-muted small mt-2" id="bulkAddDetails"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', progressHtml);
+        }
+
+        function updateBulkAddProgress(current, total, message) {
+            const progressBar = document.getElementById('bulkAddProgressBar');
+            const status = document.getElementById('bulkAddStatus');
+            const details = document.getElementById('bulkAddDetails');
+            
+            if (progressBar) {
+                const percentage = Math.round((current / total) * 100);
+                progressBar.style.width = percentage + '%';
+                progressBar.textContent = percentage + '%';
+            }
+            
+            if (status) status.textContent = message;
+            if (details) details.textContent = `${current} / ${total} ページ処理済み`;
+        }
+
+        function hideBulkAddProgress() {
+            const progressDialog = document.getElementById('bulkAddProgress');
+            if (progressDialog) progressDialog.remove();
+        }
+
+        // 結果表示機能
+        function showBulkAddResults(results) {
+            const { total, success, error, errors, addedOrders } = results;
+            
+            let message = `📊 一括追加処理が完了しました！\n\n`;
+            message += `✅ 成功: ${success}件\n`;
+            message += `❌ エラー: ${error}件\n`;
+            message += `📝 処理対象: ${total}ページ\n\n`;
+            
+            if (success > 0) {
+                message += `✨ 追加された注文:\n`;
+                addedOrders.slice(0, 5).forEach(order => {
+                    message += `• ${order.orderNumber} - ${order.productName}\n`;
+                });
+                if (addedOrders.length > 5) {
+                    message += `• ...他 ${addedOrders.length - 5}件\n`;
+                }
+                message += '\n';
+            }
+            
+            if (errors.length > 0) {
+                message += `⚠️ エラー詳細:\n`;
+                errors.slice(0, 3).forEach(error => {
+                    message += `• ${error}\n`;
+                });
+                if (errors.length > 3) {
+                    message += `• ...他 ${errors.length - 3}件\n`;
+                }
             }
 
-            const newOrder = {
-                id: 'PDF-' + Date.now(),
-                orderNumber: orderNumber,
-                customer: customer,
-                productCode: productCode,
-                productName: productName,
-                material: material,
-                unitWeight: unitWeight,
-                quantity: quantity,
-                totalWeight: unitWeight * quantity,
-                deliveryDate: deliveryDate,
-                status: 'pending',
-                notes: notes + (notes ? '\n' : '') + '[PDF取込]'
-            };
-
-            orders.push(newOrder);
-            filteredOrders = [...orders];
+            alert(message);
             
-            if (typeof saveData === 'function') saveData();
-            if (typeof updateDashboard === 'function') updateDashboard();
-            if (typeof updateTable === 'function') updateTable();
-
-            // モーダルを閉じる
-            const modal = bootstrap.Modal.getInstance(document.getElementById('pdfModal'));
-            if (modal) modal.hide();
-
-            alert(`注文 "${orderNumber}" をPDFから正常に追加しました。`);
+            // 成功通知
+            if (success > 0 && typeof showNotification === 'function') {
+                showNotification(`${success}件の注文を一括追加しました`, 'success');
+            }
         }
     </script>
 </head>
