@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Filter, Download, Edit, Trash2, Save, X } from 'lucide-react';
+import { Plus, Search, Filter, Download, Edit, Trash2, Save, X, FileSpreadsheet } from 'lucide-react';
+import ProductExcelImportModal from './ProductExcelImportModal';
 
 const ProductManagement = ({ products, onFilter, onAdd, onUpdate, onDelete, allProducts }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -7,6 +8,7 @@ const ProductManagement = ({ products, onFilter, onAdd, onUpdate, onDelete, allP
   const [statusFilter, setStatusFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isExcelImportModalOpen, setIsExcelImportModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [newProduct, setNewProduct] = useState({
     productCode: '',
@@ -85,6 +87,39 @@ const ProductManagement = ({ products, onFilter, onAdd, onUpdate, onDelete, allP
       onDelete(productId);
     }
   }, [onDelete, allProducts]);
+
+  const handleExcelImportSuccess = useCallback((importedProducts, updatedProducts, stats) => {
+    // Add new products
+    importedProducts.forEach(product => {
+      onAdd(product);
+    });
+    
+    // Update existing products if any
+    if (updatedProducts && updatedProducts.length > 0) {
+      updatedProducts.forEach(product => {
+        // Find existing product by productCode
+        const existingProduct = allProducts.find(p => p.productCode === product.productCode);
+        if (existingProduct) {
+          onUpdate(existingProduct.id, {
+            ...product,
+            id: existingProduct.id,
+            createdDate: existingProduct.createdDate, // Keep original creation date
+            updatedDate: new Date().toISOString().split('T')[0]
+          });
+        }
+      });
+    }
+    
+    // Show success message
+    let message = `製品データExcel取り込み完了`;
+    if (stats.duplicateHandling === 'skip') {
+      message += `\n新規登録: ${stats.imported}件\nスキップ: ${stats.skipped}件\n合計: ${stats.total}件`;
+    } else if (stats.duplicateHandling === 'update') {
+      message += `\n新規登録: ${stats.imported}件\n更新: ${stats.updated}件\n合計: ${stats.total}件`;
+    }
+    
+    alert(message);
+  }, [onAdd, onUpdate, allProducts]);
 
   const resetNewProduct = () => {
     setNewProduct({
@@ -198,6 +233,13 @@ const ProductManagement = ({ products, onFilter, onAdd, onUpdate, onDelete, allP
             >
               <Plus className="w-4 h-4" />
               製品追加
+            </button>
+            <button
+              onClick={() => setIsExcelImportModalOpen(true)}
+              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors shadow-md"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Excel取り込み
             </button>
             <button
               onClick={exportToCSV}
@@ -586,6 +628,14 @@ const ProductManagement = ({ products, onFilter, onAdd, onUpdate, onDelete, allP
           </div>
         </div>
       )}
+
+      {/* Product Excel Import Modal */}
+      <ProductExcelImportModal
+        isOpen={isExcelImportModalOpen}
+        onClose={() => setIsExcelImportModalOpen(false)}
+        onImportSuccess={handleExcelImportSuccess}
+        existingProducts={allProducts}
+      />
     </div>
   );
 };

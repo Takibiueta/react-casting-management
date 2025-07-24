@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Filter, Download, Edit, Trash2, Save, X, Building, User, Phone, Mail } from 'lucide-react';
+import { Plus, Search, Filter, Download, Edit, Trash2, Save, X, Building, User, Phone, Mail, FileSpreadsheet } from 'lucide-react';
+import ExcelImportModal from './ExcelImportModal';
 
 const CustomerManagement = ({ customers, onFilter, onAdd, onUpdate, onDelete, allCustomers }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isExcelImportModalOpen, setIsExcelImportModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [newCustomer, setNewCustomer] = useState({
     customerCode: '',
@@ -103,6 +105,39 @@ const CustomerManagement = ({ customers, onFilter, onAdd, onUpdate, onDelete, al
     }
   }, [onDelete, allCustomers]);
 
+  const handleExcelImportSuccess = useCallback((importedCustomers, updatedCustomers, stats) => {
+    // Add new customers
+    importedCustomers.forEach(customer => {
+      onAdd(customer);
+    });
+    
+    // Update existing customers if any
+    if (updatedCustomers && updatedCustomers.length > 0) {
+      updatedCustomers.forEach(customer => {
+        // Find existing customer by customerCode
+        const existingCustomer = allCustomers.find(c => c.customerCode === customer.customerCode);
+        if (existingCustomer) {
+          onUpdate(existingCustomer.id, {
+            ...customer,
+            id: existingCustomer.id,
+            createdDate: existingCustomer.createdDate, // Keep original creation date
+            updatedDate: new Date().toISOString().split('T')[0]
+          });
+        }
+      });
+    }
+    
+    // Show success message
+    let message = `Excel取り込み完了`;
+    if (stats.duplicateHandling === 'skip') {
+      message += `\n新規登録: ${stats.imported}件\nスキップ: ${stats.skipped}件\n合計: ${stats.total}件`;
+    } else if (stats.duplicateHandling === 'update') {
+      message += `\n新規登録: ${stats.imported}件\n更新: ${stats.updated}件\n合計: ${stats.total}件`;
+    }
+    
+    alert(message);
+  }, [onAdd, onUpdate, allCustomers]);
+
   const resetNewCustomer = () => {
     setNewCustomer({
       customerCode: '',
@@ -199,6 +234,13 @@ const CustomerManagement = ({ customers, onFilter, onAdd, onUpdate, onDelete, al
             >
               <Plus className="w-4 h-4" />
               取引先追加
+            </button>
+            <button
+              onClick={() => setIsExcelImportModalOpen(true)}
+              className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors shadow-md"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Excel取り込み
             </button>
             <button
               onClick={exportToCSV}
@@ -583,6 +625,14 @@ const CustomerManagement = ({ customers, onFilter, onAdd, onUpdate, onDelete, al
           </div>
         </div>
       )}
+
+      {/* Excel Import Modal */}
+      <ExcelImportModal
+        isOpen={isExcelImportModalOpen}
+        onClose={() => setIsExcelImportModalOpen(false)}
+        onImportSuccess={handleExcelImportSuccess}
+        existingCustomers={allCustomers}
+      />
     </div>
   );
 };
