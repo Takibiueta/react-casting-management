@@ -3588,6 +3588,237 @@
         </div>
     </div>
 
+    <!-- 製品追加モーダル -->
+    <div class="modal fade" id="addProductModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-plus-circle text-success"></i> 製品追加
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addProductForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="productCode" class="form-label">製品コード *</label>
+                                    <input type="text" class="form-control" id="productCode" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="productName" class="form-label">製品名 *</label>
+                                    <input type="text" class="form-control" id="productName" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="category" class="form-label">カテゴリ *</label>
+                                    <select class="form-select" id="category" required>
+                                        <option value="">選択してください</option>
+                                        <option value="コネクタ">コネクタ</option>
+                                        <option value="バルブ">バルブ</option>
+                                        <option value="フランジ">フランジ</option>
+                                        <option value="エルボ">エルボ</option>
+                                        <option value="ティー">ティー</option>
+                                        <option value="キャップ">キャップ</option>
+                                        <option value="その他">その他</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="material" class="form-label">材質 *</label>
+                                    <select class="form-select" id="material" required>
+                                        <option value="">選択してください</option>
+                                        <option value="S14">S14</option>
+                                        <option value="S13">S13</option>
+                                        <option value="SUS304">SUS304</option>
+                                        <option value="SUS316">SUS316</option>
+                                        <option value="FCD400">FCD400</option>
+                                        <option value="FCD450">FCD450</option>
+                                        <option value="その他">その他</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="unitWeight" class="form-label">単重量 (kg) *</label>
+                                    <input type="number" step="0.1" min="0" class="form-control" id="unitWeight" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="standardPrice" class="form-label">標準価格 (円)</label>
+                                    <input type="number" min="0" class="form-control" id="standardPrice">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="drawingNumber" class="form-label">図面番号</label>
+                                    <input type="text" class="form-control" id="drawingNumber">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="specifications" class="form-label">仕様</label>
+                            <textarea class="form-control" id="specifications" rows="2"></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="description" class="form-label">説明</label>
+                            <textarea class="form-control" id="description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="productStatus" class="form-label">ステータス</label>
+                                    <select class="form-select" id="productStatus">
+                                        <option value="active">アクティブ</option>
+                                        <option value="inactive">非アクティブ</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> キャンセル
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="saveProduct()">
+                        <i class="bi bi-check-circle"></i> 追加
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 取引先追加モーダル -->
+    <div class="modal fade" id="addCustomerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-plus-circle text-success"></i> 取引先追加
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addCustomerForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="customerCode" class="form-label">取引先コード *</label>
+                                    <input type="text" class="form-control" id="customerCode" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="companyName" class="form-label">会社名 *</label>
+                                    <input type="text" class="form-control" id="companyName" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="contactPerson" class="form-label">担当者名</label>
+                                    <input type="text" class="form-control" id="contactPerson">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="department" class="form-label">部署</label>
+                                    <input type="text" class="form-control" id="department">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="phoneNumber" class="form-label">電話番号</label>
+                                    <input type="tel" class="form-control" id="phoneNumber">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="email" class="form-label">メールアドレス</label>
+                                    <input type="email" class="form-control" id="email">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="address" class="form-label">住所</label>
+                            <textarea class="form-control" id="address" rows="2"></textarea>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="customerType" class="form-label">取引先種別</label>
+                                    <select class="form-select" id="customerType">
+                                        <option value="direct">直接顧客</option>
+                                        <option value="agent">代理店</option>
+                                        <option value="distributor">販売店</option>
+                                        <option value="supplier">仕入先</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="paymentTerms" class="form-label">支払条件</label>
+                                    <select class="form-select" id="paymentTerms">
+                                        <option value="net30">30日後</option>
+                                        <option value="net60">60日後</option>
+                                        <option value="net90">90日後</option>
+                                        <option value="cod">代引き</option>
+                                        <option value="advance">前払い</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="customerStatus" class="form-label">ステータス</label>
+                                    <select class="form-select" id="customerStatus">
+                                        <option value="active">アクティブ</option>
+                                        <option value="inactive">非アクティブ</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="customerNotes" class="form-label">備考</label>
+                            <textarea class="form-control" id="customerNotes" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> キャンセル
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="saveNewCustomer()">
+                        <i class="bi bi-check-circle"></i> 追加
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 取引先編集モーダル -->
     <div class="modal fade" id="editCustomerModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -3720,6 +3951,104 @@
                     </button>
                     <button type="button" class="btn btn-primary" onclick="saveCustomer()">
                         <i class="bi bi-check-circle"></i> 保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 製品Excel取り込みモーダル -->
+    <div class="modal fade" id="excelProductModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-file-excel text-success"></i> 製品Excel取り込み
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Excel取り込み手順:</strong><br>
+                        1. Excelファイルを選択してください<br>
+                        2. 必要な列: 製品コード、製品名、カテゴリ、材質、単重量<br>
+                        3. 1行目はヘッダー行として扱われます
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="productExcelFile" class="form-label">Excelファイル選択</label>
+                        <input type="file" class="form-control" id="productExcelFile" 
+                               accept=".xlsx,.xls,.csv" onchange="handleProductExcelFile(this)">
+                    </div>
+                    
+                    <div id="productPreviewArea" style="display: none;">
+                        <h6>プレビュー (最初の5行)</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered" id="productPreviewTable">
+                                <thead></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div id="productImportSummary" class="mt-3"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> キャンセル
+                    </button>
+                    <button type="button" class="btn btn-success" id="importProductBtn" 
+                            onclick="importProductData()" disabled>
+                        <i class="bi bi-upload"></i> データ取り込み
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 取引先Excel取り込みモーダル -->
+    <div class="modal fade" id="excelCustomerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-file-excel text-success"></i> 取引先Excel取り込み
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Excel取り込み手順:</strong><br>
+                        1. Excelファイルを選択してください<br>
+                        2. 必要な列: 取引先コード、会社名、担当者、電話番号、メール<br>
+                        3. 1行目はヘッダー行として扱われます
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="customerExcelFile" class="form-label">Excelファイル選択</label>
+                        <input type="file" class="form-control" id="customerExcelFile" 
+                               accept=".xlsx,.xls,.csv" onchange="handleCustomerExcelFile(this)">
+                    </div>
+                    
+                    <div id="customerPreviewArea" style="display: none;">
+                        <h6>プレビュー (最初の5行)</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered" id="customerPreviewTable">
+                                <thead></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div id="customerImportSummary" class="mt-3"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> キャンセル
+                    </button>
+                    <button type="button" class="btn btn-success" id="importCustomerBtn" 
+                            onclick="importCustomerData()" disabled>
+                        <i class="bi bi-upload"></i> データ取り込み
                     </button>
                 </div>
             </div>
@@ -4104,11 +4433,80 @@
         // === プレースホルダー関数（モーダル表示等） ===
         
         function showAddProductModal() {
-            alert('製品追加機能は今後実装予定です');
+            // フォームリセット
+            document.getElementById('addProductForm').reset();
+            document.getElementById('productStatus').value = 'active';
+            
+            // モーダル表示
+            const modal = new bootstrap.Modal(document.getElementById('addProductModal'));
+            modal.show();
+        }
+        
+        function saveProduct() {
+            // フォームデータ取得
+            const productCode = document.getElementById('productCode').value.trim();
+            const productName = document.getElementById('productName').value.trim();
+            const category = document.getElementById('category').value;
+            const material = document.getElementById('material').value;
+            const unitWeight = parseFloat(document.getElementById('unitWeight').value);
+            const standardPrice = parseInt(document.getElementById('standardPrice').value) || 0;
+            const drawingNumber = document.getElementById('drawingNumber').value.trim();
+            const specifications = document.getElementById('specifications').value.trim();
+            const description = document.getElementById('description').value.trim();
+            const status = document.getElementById('productStatus').value;
+            
+            // 必須項目チェック
+            if (!productCode || !productName || !category || !material || !unitWeight) {
+                alert('必須項目（*）を全て入力してください。');
+                return;
+            }
+            
+            // 製品コード重複チェック
+            if (products.find(p => p.productCode === productCode)) {
+                alert('この製品コードは既に存在します。別の製品コードを入力してください。');
+                return;
+            }
+            
+            // 新しい製品データ作成
+            const newProduct = {
+                id: Math.max(...products.map(p => p.id), 0) + 1,
+                productCode: productCode,
+                productName: productName,
+                category: category,
+                material: material,
+                unitWeight: unitWeight,
+                standardPrice: standardPrice,
+                description: description,
+                specifications: specifications,
+                drawingNumber: drawingNumber,
+                status: status,
+                createdDate: new Date().toISOString().split('T')[0],
+                modifiedDate: new Date().toISOString().split('T')[0]
+            };
+            
+            // データ追加
+            products.push(newProduct);
+            filteredProducts = [...products];
+            
+            // データ保存
+            saveData();
+            
+            // 表示更新
+            updateProductTable();
+            updateProductDashboard();
+            
+            // モーダル閉じる
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addProductModal'));
+            modal.hide();
+            
+            // 通知表示
+            showNotification(`製品「${productName}」を追加しました`, 'success');
         }
 
         function showExcelProductModal() {
-            alert('製品Excel取込機能は今後実装予定です');
+            // モーダル表示
+            const modal = new bootstrap.Modal(document.getElementById('excelProductModal'));
+            modal.show();
         }
 
         function exportProductsToCSV() {
@@ -4133,11 +4531,92 @@
         }
 
         function showAddCustomerModal() {
-            alert('取引先追加機能は今後実装予定です');
+            // フォームリセット
+            document.getElementById('addCustomerForm').reset();
+            document.getElementById('customerType').value = 'direct';
+            document.getElementById('paymentTerms').value = 'net30';
+            document.getElementById('customerStatus').value = 'active';
+            
+            // モーダル表示
+            const modal = new bootstrap.Modal(document.getElementById('addCustomerModal'));
+            modal.show();
+        }
+        
+        function saveNewCustomer() {
+            // フォームデータ取得
+            const customerCode = document.getElementById('customerCode').value.trim();
+            const companyName = document.getElementById('companyName').value.trim();
+            const contactPerson = document.getElementById('contactPerson').value.trim();
+            const department = document.getElementById('department').value.trim();
+            const phoneNumber = document.getElementById('phoneNumber').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const address = document.getElementById('address').value.trim();
+            const customerType = document.getElementById('customerType').value;
+            const paymentTerms = document.getElementById('paymentTerms').value;
+            const status = document.getElementById('customerStatus').value;
+            const notes = document.getElementById('customerNotes').value.trim();
+            
+            // 必須項目チェック
+            if (!customerCode || !companyName) {
+                alert('必須項目（*）を全て入力してください。');
+                return;
+            }
+            
+            // 取引先コード重複チェック
+            if (customers.find(c => c.customerCode === customerCode)) {
+                alert('この取引先コードは既に存在します。別の取引先コードを入力してください。');
+                return;
+            }
+            
+            // メールアドレス形式チェック
+            if (email && !email.includes('@')) {
+                alert('正しいメールアドレス形式で入力してください。');
+                return;
+            }
+            
+            // 新しい取引先データ作成
+            const newCustomer = {
+                id: Math.max(...customers.map(c => c.id), 0) + 1,
+                customerCode: customerCode,
+                companyName: companyName,
+                contactPerson: contactPerson,
+                department: department,
+                phoneNumber: phoneNumber,
+                email: email,
+                address: address,
+                customerType: customerType,
+                paymentTerms: paymentTerms,
+                status: status,
+                notes: notes,
+                totalOrders: 0,
+                lastOrderDate: null,
+                createdDate: new Date().toISOString().split('T')[0],
+                modifiedDate: new Date().toISOString().split('T')[0]
+            };
+            
+            // データ追加
+            customers.push(newCustomer);
+            filteredCustomers = [...customers];
+            
+            // データ保存
+            saveData();
+            
+            // 表示更新
+            updateCustomerTable();
+            updateCustomerDashboard();
+            
+            // モーダル閉じる
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addCustomerModal'));
+            modal.hide();
+            
+            // 通知表示
+            showNotification(`取引先「${companyName}」を追加しました`, 'success');
         }
 
         function showExcelCustomerModal() {
-            alert('取引先Excel取込機能は今後実装予定です');
+            // モーダル表示
+            const modal = new bootstrap.Modal(document.getElementById('excelCustomerModal'));
+            modal.show();
         }
 
         function exportCustomersToCSV() {
@@ -4274,6 +4753,376 @@
             console.log('ステンレス鋳造管理システム完全版 起動完了');
             console.log('製品管理・取引先管理機能が追加されました');
         });
+
+        // === Excel取り込み機能 ===
+        
+        let productExcelData = [];
+        let customerExcelData = [];
+
+        // 製品Excel処理
+        function handleProductExcelFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    if (jsonData.length < 2) {
+                        alert('データが不足しています。ヘッダー行とデータ行が必要です。');
+                        return;
+                    }
+
+                    processProductExcelData(jsonData);
+                } catch (error) {
+                    console.error('Excel読み込みエラー:', error);
+                    alert('Excelファイルの読み込みに失敗しました。');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processProductExcelData(jsonData) {
+            const headers = jsonData[0];
+            const dataRows = jsonData.slice(1);
+            
+            // 列マッピング自動検出
+            const columnMapping = autoDetectProductColumns(headers);
+            
+            // データをパース
+            productExcelData = dataRows.map((row, index) => {
+                return {
+                    rowIndex: index + 2,
+                    productCode: row[columnMapping.productCode] || `AUTO-${Date.now()}-${index}`,
+                    productName: row[columnMapping.productName] || '不明',
+                    category: row[columnMapping.category] || 'その他',
+                    material: row[columnMapping.material] || 'S14',
+                    unitWeight: parseFloat(row[columnMapping.unitWeight]) || 0,
+                    standardPrice: parseInt(row[columnMapping.standardPrice]) || 0,
+                    description: row[columnMapping.description] || '',
+                    specifications: row[columnMapping.specifications] || '',
+                    drawingNumber: row[columnMapping.drawingNumber] || '',
+                    status: 'active'
+                };
+            }).filter(item => item.productName !== '不明' || item.productCode.indexOf('AUTO-') === -1);
+
+            displayProductPreview(headers, productExcelData);
+        }
+
+        function autoDetectProductColumns(headers) {
+            const mapping = {};
+            const patterns = {
+                productCode: ['製品コード', '品番', '型番', 'Product Code', 'Code'],
+                productName: ['製品名', '品名', '商品名', 'Product Name', 'Name'],
+                category: ['カテゴリ', '分類', 'Category', 'Type'],
+                material: ['材質', '材料', 'Material'],
+                unitWeight: ['単重量', '重量', 'Weight', '単重'],
+                standardPrice: ['標準価格', '価格', 'Price', '単価'],
+                description: ['説明', '備考', 'Description'],
+                specifications: ['仕様', 'Specifications', 'Spec'],
+                drawingNumber: ['図面番号', '図面', 'Drawing']
+            };
+
+            headers.forEach((header, index) => {
+                const headerStr = header.toString().trim();
+                Object.keys(patterns).forEach(field => {
+                    patterns[field].forEach(pattern => {
+                        if (headerStr.includes(pattern) && !mapping[field]) {
+                            mapping[field] = index;
+                        }
+                    });
+                });
+            });
+
+            return mapping;
+        }
+
+        function displayProductPreview(headers, data) {
+            const previewArea = document.getElementById('productPreviewArea');
+            const table = document.getElementById('productPreviewTable');
+            const summary = document.getElementById('productImportSummary');
+            const importBtn = document.getElementById('importProductBtn');
+
+            // テーブルヘッダー
+            const thead = table.querySelector('thead');
+            thead.innerHTML = '';
+            const headerRow = document.createElement('tr');
+            ['行', '製品コード', '製品名', 'カテゴリ', '材質', '単重量'].forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+
+            // データ行（最初の5行）
+            const tbody = table.querySelector('tbody');
+            tbody.innerHTML = '';
+            data.slice(0, 5).forEach(item => {
+                const row = document.createElement('tr');
+                [
+                    item.rowIndex,
+                    item.productCode,
+                    item.productName,
+                    item.category,
+                    item.material,
+                    `${item.unitWeight}kg`
+                ].forEach(text => {
+                    const td = document.createElement('td');
+                    td.textContent = text;
+                    row.appendChild(td);
+                });
+                tbody.appendChild(row);
+            });
+
+            // サマリー
+            summary.innerHTML = `
+                <div class="alert alert-info">
+                    <strong>取り込み予定:</strong> ${data.length}件の製品データ<br>
+                    <strong>重複チェック:</strong> 製品コードの重複は自動でスキップされます
+                </div>
+            `;
+
+            previewArea.style.display = 'block';
+            importBtn.disabled = data.length === 0;
+        }
+
+        function importProductData() {
+            if (productExcelData.length === 0) {
+                alert('取り込むデータがありません。');
+                return;
+            }
+
+            let importCount = 0;
+            let skipCount = 0;
+
+            productExcelData.forEach(item => {
+                // 製品コード重複チェック
+                if (products.find(p => p.productCode === item.productCode)) {
+                    skipCount++;
+                    return;
+                }
+
+                const newProduct = {
+                    id: Math.max(...products.map(p => p.id), 0) + 1 + importCount,
+                    ...item,
+                    createdDate: new Date().toISOString().split('T')[0],
+                    modifiedDate: new Date().toISOString().split('T')[0]
+                };
+
+                products.push(newProduct);
+                importCount++;
+            });
+
+            // データ更新
+            filteredProducts = [...products];
+            updateProductTable();
+            updateProductDashboard();
+            saveData();
+
+            // モーダル閉じる
+            const modal = bootstrap.Modal.getInstance(document.getElementById('excelProductModal'));
+            modal.hide();
+
+            // 結果通知
+            showNotification(
+                `製品データを取り込みました: ${importCount}件追加、${skipCount}件スキップ`,
+                'success'
+            );
+
+            // リセット
+            productExcelData = [];
+            document.getElementById('productExcelFile').value = '';
+            document.getElementById('productPreviewArea').style.display = 'none';
+        }
+
+        // 取引先Excel処理
+        function handleCustomerExcelFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    if (jsonData.length < 2) {
+                        alert('データが不足しています。ヘッダー行とデータ行が必要です。');
+                        return;
+                    }
+
+                    processCustomerExcelData(jsonData);
+                } catch (error) {
+                    console.error('Excel読み込みエラー:', error);
+                    alert('Excelファイルの読み込みに失敗しました。');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processCustomerExcelData(jsonData) {
+            const headers = jsonData[0];
+            const dataRows = jsonData.slice(1);
+            
+            // 列マッピング自動検出
+            const columnMapping = autoDetectCustomerColumns(headers);
+            
+            // データをパース
+            customerExcelData = dataRows.map((row, index) => {
+                return {
+                    rowIndex: index + 2,
+                    customerCode: row[columnMapping.customerCode] || `AUTO-${Date.now()}-${index}`,
+                    companyName: row[columnMapping.companyName] || '不明',
+                    contactPerson: row[columnMapping.contactPerson] || '',
+                    department: row[columnMapping.department] || '',
+                    phone: row[columnMapping.phone] || '',
+                    email: row[columnMapping.email] || '',
+                    address: row[columnMapping.address] || '',
+                    paymentTerms: row[columnMapping.paymentTerms] || '月末締め翌月末払い',
+                    taxType: 'external',
+                    customerType: 'direct',
+                    status: 'active',
+                    notes: `Excel取込 行:${index + 2}`
+                };
+            }).filter(item => item.companyName !== '不明');
+
+            displayCustomerPreview(headers, customerExcelData);
+        }
+
+        function autoDetectCustomerColumns(headers) {
+            const mapping = {};
+            const patterns = {
+                customerCode: ['取引先コード', '顧客コード', 'Customer Code', 'Code'],
+                companyName: ['会社名', '企業名', 'Company', 'Company Name'],
+                contactPerson: ['担当者', '担当者名', 'Contact', 'Person'],
+                department: ['部署', '部門', 'Department'],
+                phone: ['電話', '電話番号', 'Phone', 'Tel'],
+                email: ['メール', 'Email', 'E-mail'],
+                address: ['住所', 'Address'],
+                paymentTerms: ['支払条件', 'Payment', '決済条件']
+            };
+
+            headers.forEach((header, index) => {
+                const headerStr = header.toString().trim();
+                Object.keys(patterns).forEach(field => {
+                    patterns[field].forEach(pattern => {
+                        if (headerStr.includes(pattern) && !mapping[field]) {
+                            mapping[field] = index;
+                        }
+                    });
+                });
+            });
+
+            return mapping;
+        }
+
+        function displayCustomerPreview(headers, data) {
+            const previewArea = document.getElementById('customerPreviewArea');
+            const table = document.getElementById('customerPreviewTable');
+            const summary = document.getElementById('customerImportSummary');
+            const importBtn = document.getElementById('importCustomerBtn');
+
+            // テーブルヘッダー
+            const thead = table.querySelector('thead');
+            thead.innerHTML = '';
+            const headerRow = document.createElement('tr');
+            ['行', '取引先コード', '会社名', '担当者', '電話番号', 'メール'].forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+
+            // データ行（最初の5行）
+            const tbody = table.querySelector('tbody');
+            tbody.innerHTML = '';
+            data.slice(0, 5).forEach(item => {
+                const row = document.createElement('tr');
+                [
+                    item.rowIndex,
+                    item.customerCode,
+                    item.companyName,
+                    item.contactPerson,
+                    item.phone,
+                    item.email
+                ].forEach(text => {
+                    const td = document.createElement('td');
+                    td.textContent = text;
+                    row.appendChild(td);
+                });
+                tbody.appendChild(row);
+            });
+
+            // サマリー
+            summary.innerHTML = `
+                <div class="alert alert-info">
+                    <strong>取り込み予定:</strong> ${data.length}件の取引先データ<br>
+                    <strong>重複チェック:</strong> 取引先コードの重複は自動でスキップされます
+                </div>
+            `;
+
+            previewArea.style.display = 'block';
+            importBtn.disabled = data.length === 0;
+        }
+
+        function importCustomerData() {
+            if (customerExcelData.length === 0) {
+                alert('取り込むデータがありません。');
+                return;
+            }
+
+            let importCount = 0;
+            let skipCount = 0;
+
+            customerExcelData.forEach(item => {
+                // 取引先コード重複チェック
+                if (customers.find(c => c.customerCode === item.customerCode)) {
+                    skipCount++;
+                    return;
+                }
+
+                const newCustomer = {
+                    id: Math.max(...customers.map(c => c.id), 0) + 1 + importCount,
+                    ...item,
+                    totalOrders: 0,
+                    lastOrderDate: null,
+                    createdDate: new Date().toISOString().split('T')[0],
+                    modifiedDate: new Date().toISOString().split('T')[0]
+                };
+
+                customers.push(newCustomer);
+                importCount++;
+            });
+
+            // データ更新
+            filteredCustomers = [...customers];
+            updateCustomerTable();
+            updateCustomerDashboard();
+            saveData();
+
+            // モーダル閉じる
+            const modal = bootstrap.Modal.getInstance(document.getElementById('excelCustomerModal'));
+            modal.hide();
+
+            // 結果通知
+            showNotification(
+                `取引先データを取り込みました: ${importCount}件追加、${skipCount}件スキップ`,
+                'success'
+            );
+
+            // リセット
+            customerExcelData = [];
+            document.getElementById('customerExcelFile').value = '';
+            document.getElementById('customerPreviewArea').style.display = 'none';
+        }
     </script>
 
 </body>

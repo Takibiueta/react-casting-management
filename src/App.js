@@ -6,8 +6,8 @@ import OrderManagement from './components/OrderManagement';
 import ProductManagement from './components/ProductManagement';
 import CustomerManagement from './components/CustomerManagement';
 import AIChat from './components/AIChat';
-import PDFProcessor from './components/PDFProcessor';
-import ExcelImporter from './components/ExcelImporter';
+import PDFReader from './PDFReader';
+import ExcelImporter from './ExcelImporter';
 
 // サンプルデータ
 const sampleOrders = [
@@ -201,21 +201,9 @@ const App = () => {
   }, [addOrder]);
 
   // Excel import handler
-  const handleExcelImport = useCallback((importedData, dataType = 'orders') => {
-    switch (dataType) {
-      case 'orders':
-        importedData.forEach(data => addOrder(data));
-        break;
-      case 'products':
-        importedData.forEach(data => addProduct(data));
-        break;
-      case 'customers':
-        importedData.forEach(data => addCustomer(data));
-        break;
-      default:
-        console.error('Unknown data type:', dataType);
-    }
-  }, [addOrder, addProduct, addCustomer]);
+  const handleExcelImport = useCallback((importedData) => {
+    importedData.forEach(data => addOrder(data));
+  }, [addOrder]);
 
   // Calculate dashboard statistics
   const dashboardStats = {
@@ -298,8 +286,11 @@ const App = () => {
       <main className="max-w-7xl mx-auto p-4">
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-3 mb-6">
-          <PDFProcessor onDataExtracted={handlePDFImport} />
-          <ExcelImporter onDataImported={handleExcelImport} />
+          <PDFReader 
+            onOrderExtracted={handlePDFImport} 
+            onMultipleOrdersExtracted={(orders) => orders.forEach(order => addOrder(order))} 
+          />
+          <ExcelImporter onOrdersImported={handleExcelImport} />
         </div>
 
         {/* Tab Content */}
