@@ -2,15 +2,26 @@ import React, { useState, useRef, useEffect } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Upload, FileText, Check, X, Loader } from 'lucide-react';
 
-// PDF.js worker設定（開発環境用の簡単な設定）
+// PDF.js worker設定
 const setupPdfWorker = () => {
   try {
-    // 開発環境では Worker を無効化してメインスレッドで実行
-    // これにより Worker エラーを回避
-    pdfjsLib.GlobalWorkerOptions.workerSrc = false;
-    console.log('PDF processing configured for main thread (worker disabled)');
+    // pdfjs-dist v4では.mjsファイルを使用
+    if (process.env.NODE_ENV === 'production') {
+      // 本番環境ではCDNを使用
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    } else {
+      // 開発環境ではローカルファイルを使用
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+    }
+    console.log('PDF worker configured successfully for pdfjs-dist v4');
   } catch (error) {
-    console.warn('PDF Worker setup failed:', error);
+    console.warn('PDF Worker setup failed, falling back to main thread:', error);
+    // フォールバック：workerを無効化して安全にフォールバック
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = null;
+    } catch (fallbackError) {
+      console.warn('Fallback also failed:', fallbackError);
+    }
   }
 };
 
@@ -47,9 +58,9 @@ const PDFReader = ({ onOrderExtracted, onMultipleOrdersExtracted }) => {
   const processPDF = async (file) => {
     setIsProcessing(true);
     try {
-      // Worker エラー対策として再度設定
+      // Worker が設定されていない場合のフォールバック
       if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = false;
+        setupPdfWorker();
       }
       
       const arrayBuffer = await file.arrayBuffer();

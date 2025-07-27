@@ -1,7 +1,29 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
 // PDF.js worker を設定
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+const setupPdfWorker = () => {
+  try {
+    // pdfjs-dist v4では.mjsファイルを使用
+    if (process.env.NODE_ENV === 'production') {
+      // 本番環境ではCDNを使用
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    } else {
+      // 開発環境ではローカルファイルを使用
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+    }
+    console.log('PDF worker configured successfully in pdfParser for v4');
+  } catch (error) {
+    console.warn('PDF Worker setup failed in pdfParser, falling back to main thread:', error);
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = null;
+    } catch (fallbackError) {
+      console.warn('Fallback also failed:', fallbackError);
+    }
+  }
+};
+
+// 初期化時にworkerを設定
+setupPdfWorker();
 
 // 日本語ビジネス文書用の正規表現パターン
 const REGEX_PATTERNS = {
@@ -74,6 +96,11 @@ const REGEX_PATTERNS = {
  */
 export const extractTextFromPDF = async (file) => {
   try {
+    // Worker が設定されていない場合のフォールバック
+    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      setupPdfWorker();
+    }
+    
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
     
