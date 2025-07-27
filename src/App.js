@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useOrderData, useProductData, useCustomerData } from './hooks/useLocalStorage';
+import { AuthProvider, useAuth, usePermissions } from './hooks/useAuth';
+import LoginPage from './components/LoginPage';
+import FieldWorkerDashboard from './components/FieldWorkerDashboard';
 import Dashboard from './components/Dashboard';
 import TabNavigation from './components/TabNavigation';
 import OrderManagement from './components/OrderManagement';
@@ -9,7 +12,7 @@ import AIChat from './components/AIChat';
 import PDFReader from './PDFReader';
 import ExcelImporter from './ExcelImporter';
 
-// サンプルデータ
+// サンプルデータ（担当者フィールドを追加）
 const sampleOrders = [
   {
     id: '1',
@@ -24,6 +27,7 @@ const sampleOrders = [
     orderDate: '2024-12-01',
     deliveryDate: '2025-01-31',
     status: 'pending',
+    assignedWorker: 'worker1',
     notes: '25.4.9在庫3ケ仕上済'
   },
   {
@@ -39,6 +43,7 @@ const sampleOrders = [
     orderDate: '2024-12-15',
     deliveryDate: '2025-02-28',
     status: 'pending',
+    assignedWorker: 'worker2',
     notes: ''
   },
   {
@@ -54,6 +59,7 @@ const sampleOrders = [
     orderDate: '2024-12-20',
     deliveryDate: '2025-03-21',
     status: 'pending',
+    assignedWorker: 'worker1',
     notes: ''
   },
   {
@@ -69,7 +75,24 @@ const sampleOrders = [
     orderDate: '2024-12-25',
     deliveryDate: '2025-03-21',
     status: 'processing',
+    assignedWorker: 'worker2',
     notes: '枠6W分のみ'
+  },
+  {
+    id: '5',
+    orderNumber: 'FLD001',
+    customer: '精密機器株式会社',
+    productCode: 'P100-220-0001',
+    productName: 'フランジ FL-20',
+    material: 'SUS304',
+    unitWeight: 25.8,
+    quantity: 8,
+    totalWeight: 206.4,
+    orderDate: '2025-01-15',
+    deliveryDate: '2025-01-30',
+    status: 'pending',
+    assignedWorker: 'worker1',
+    notes: '急ぎ対応'
   }
 ];
 
@@ -141,11 +164,16 @@ const sampleCustomers = [
   }
 ];
 
-const App = () => {
+// メインアプリケーションコンポーネント
+const AppContent = () => {
   const [activeTab, setActiveTab] = useState('orders');
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
+  
+  // 認証フック
+  const { isLoggedIn, currentUser } = useAuth();
+  const { isFieldWorker } = usePermissions();
   
   // Data hooks
   const { orders, addOrder, updateOrder, deleteOrder, setOrders } = useOrderData();
@@ -218,6 +246,22 @@ const App = () => {
     batchCount: Math.ceil(orders.reduce((sum, order) => sum + (order.totalWeight || 0), 0) / 300)
   };
 
+  // ログイン状態によってUIを切り替え
+  if (!isLoggedIn) {
+    return <LoginPage />;
+  }
+
+  // 現場作業者の場合は専用画面を表示
+  if (isFieldWorker) {
+    return (
+      <FieldWorkerDashboard
+        orders={orders}
+        products={products}
+        onUpdateOrder={updateOrder}
+      />
+    );
+  }
+
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'orders':
@@ -258,6 +302,7 @@ const App = () => {
     }
   };
 
+  // 管理者・監督者向けの管理画面
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -267,11 +312,16 @@ const App = () => {
             <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
               <span className="text-lg font-bold">🏭</span>
             </div>
-            <h1 className="text-2xl font-bold">ステンレス鋳造管理システム - 完全版</h1>
+            <h1 className="text-2xl font-bold">ステンレス鋳造管理システム - 管理画面</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="text-sm">システム稼働中</span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm opacity-90">
+              {currentUser?.name} ({currentUser?.role === 'admin' ? '管理者' : '監督者'})
+            </span>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-sm">システム稼働中</span>
+            </div>
           </div>
         </div>
       </header>
@@ -305,6 +355,15 @@ const App = () => {
         onOrdersUpdate={setFilteredOrders}
       />
     </div>
+  );
+};
+
+// AuthProviderでラップしたメインアプリ
+const App = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 

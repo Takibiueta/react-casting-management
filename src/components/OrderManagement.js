@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Edit, Trash2, Search, Filter, Download, Save, X } from 'lucide-react';
+import VirtualScrollTable from './VirtualScrollTable';
+import { useAuth } from '../hooks/useAuth';
 
 const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrders }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -8,6 +10,8 @@ const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrder
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
+  const { workers } = useAuth();
+  
   const [newOrder, setNewOrder] = useState({
     orderNumber: '',
     customer: '',
@@ -19,6 +23,7 @@ const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrder
     orderDate: new Date().toISOString().split('T')[0],
     deliveryDate: '',
     status: 'pending',
+    assignedWorker: '',
     notes: ''
   });
 
@@ -92,9 +97,15 @@ const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrder
       orderDate: new Date().toISOString().split('T')[0],
       deliveryDate: '',
       status: 'pending',
+      assignedWorker: '',
       notes: ''
     });
   };
+
+  const getWorkerName = useCallback((workerId) => {
+    const worker = workers.find(w => w.id === workerId);
+    return worker ? worker.name : '未割当';
+  }, [workers]);
 
   const exportToCSV = () => {
     const headers = ['注文番号', '顧客名', '品番', '品名', '材質', '単重量', '数量', '総重量', '注文日', '納期', 'ステータス', '備考'];
@@ -165,10 +176,14 @@ const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrder
   };
 
   const getUrgencyIndicator = (deliveryDate, status) => {
-    if (status === 'completed') return null;
+    if (!deliveryDate || !status || status === 'completed') return null;
     
     const today = new Date();
     const delivery = new Date(deliveryDate);
+    
+    // 日付が無効な場合の処理
+    if (isNaN(delivery.getTime())) return null;
+    
     const daysDiff = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
     
     if (daysDiff < 0) {
@@ -178,6 +193,142 @@ const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrder
     }
     return <span className="text-gray-600">{daysDiff}日</span>;
   };
+
+  // VirtualScrollTable用のカラム定義
+  const tableColumns = useMemo(() => [
+    {
+      key: 'orderNumber',
+      title: '注文番号',
+      sortable: true,
+      width: '120px',
+      formatter: (value) => <span className="font-mono text-sm">{value}</span>
+    },
+    {
+      key: 'customer',
+      title: '顧客名',
+      sortable: true,
+      width: '150px'
+    },
+    {
+      key: 'productCode',
+      title: '品番',
+      sortable: true,
+      width: '130px',
+      formatter: (value) => <span className="font-mono text-sm bg-gray-50 px-2 py-1 rounded">{value}</span>
+    },
+    {
+      key: 'productName',
+      title: '品名',
+      sortable: true,
+      flex: '2'
+    },
+    {
+      key: 'material',
+      title: '材質',
+      sortable: true,
+      width: '80px',
+      formatter: (value) => getMaterialBadge(value)
+    },
+    {
+      key: 'unitWeight',
+      title: '単重量',
+      sortable: true,
+      width: '80px',
+      type: 'weight'
+    },
+    {
+      key: 'quantity',
+      title: '数量',
+      sortable: true,
+      width: '70px',
+      formatter: (value) => `${value}個`
+    },
+    {
+      key: 'totalWeight',
+      title: '総重量',
+      sortable: true,
+      width: '90px',
+      type: 'weight',
+      className: 'font-bold'
+    },
+    {
+      key: 'orderDate',
+      title: '注文日',
+      sortable: true,
+      width: '100px'
+    },
+    {
+      key: 'deliveryDate',
+      title: '納期',
+      sortable: true,
+      width: '120px',
+      formatter: (value, row) => (
+        <div>
+          <div className="text-sm">{value}</div>
+          <div>{row ? getUrgencyIndicator(value, row.status) : null}</div>
+        </div>
+      )
+    },
+    {
+      key: 'status',
+      title: 'ステータス',
+      sortable: true,
+      width: '100px',
+      formatter: (value) => getStatusBadge(value)
+    },
+    {
+      key: 'assignedWorker',
+      title: '担当者',
+      sortable: true,
+      width: '100px',
+      formatter: (value) => (
+        <span className={`text-sm px-2 py-1 rounded ${
+          value ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+        }`}>
+          {getWorkerName(value)}
+        </span>
+      )
+    },
+    {
+      key: 'notes',
+      title: '備考',
+      width: '120px',
+      formatter: (value) => (
+        <span className="text-sm text-gray-600 truncate" title={value}>
+          {value}
+        </span>
+      )
+    },
+    {
+      key: 'actions',
+      title: '操作',
+      width: '80px',
+      formatter: (_, row) => (
+        <div className="flex gap-1">
+          <button
+            onClick={() => handleEditOrder(row)}
+            className="text-blue-600 hover:text-blue-800 p-1 rounded transition-colors"
+            title="編集"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleDeleteOrder(row.id)}
+            className="text-red-600 hover:text-red-800 p-1 rounded transition-colors"
+            title="削除"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )
+    }
+  ], [handleEditOrder, handleDeleteOrder, getWorkerName]);
+
+  // VirtualScrollTable用の行クリックハンドラー
+  const handleRowClick = useCallback((order) => {
+    // 行クリック時の動作（必要に応じて実装）
+    console.log('Row clicked:', order);
+  }, []);
 
   return (
     <div className="bg-white rounded-lg shadow-md">
@@ -260,82 +411,17 @@ const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrder
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-800 text-white">
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium">注文番号</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">顧客名</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">品番</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">品名</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">材質</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">単重量</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">数量</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">総重量</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">注文日</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">納期</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">ステータス</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">備考</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((order) => {
-              const today = new Date();
-              const delivery = new Date(order.deliveryDate);
-              const daysDiff = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
-              const isUrgent = daysDiff <= 7 && order.status !== 'completed';
-              const isOverdue = daysDiff < 0 && order.status !== 'completed';
-              
-              return (
-                <tr 
-                  key={order.id} 
-                  className={`border-b hover:bg-gray-50 transition-colors ${
-                    isOverdue ? 'bg-red-50' : 
-                    isUrgent ? 'bg-yellow-50' : ''
-                  }`}
-                >
-                  <td className="px-4 py-3 text-sm font-mono">{order.orderNumber}</td>
-                  <td className="px-4 py-3 text-sm">{order.customer}</td>
-                  <td className="px-4 py-3 text-sm font-mono bg-gray-50">{order.productCode}</td>
-                  <td className="px-4 py-3 text-sm">{order.productName}</td>
-                  <td className="px-4 py-3">{getMaterialBadge(order.material)}</td>
-                  <td className="px-4 py-3 text-sm">{order.unitWeight}kg</td>
-                  <td className="px-4 py-3 text-sm">{order.quantity}個</td>
-                  <td className="px-4 py-3 text-sm font-bold">{order.totalWeight}kg</td>
-                  <td className="px-4 py-3 text-sm">{order.orderDate}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <div>{order.deliveryDate}</div>
-                    <div>{getUrgencyIndicator(order.deliveryDate, order.status)}</div>
-                  </td>
-                  <td className="px-4 py-3">{getStatusBadge(order.status)}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 max-w-32 truncate" title={order.notes}>
-                    {order.notes}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEditOrder(order)}
-                        className="text-blue-600 hover:text-blue-800 p-1 rounded transition-colors"
-                        title="編集"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteOrder(order.id)}
-                        className="text-red-600 hover:text-red-800 p-1 rounded transition-colors"
-                        title="削除"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* Virtual Scroll Table */}
+      <div className="p-4">
+        <VirtualScrollTable
+          data={orders}
+          columns={tableColumns}
+          itemHeight={70}
+          containerHeight={500}
+          onRowClick={handleRowClick}
+          enablePerformanceMonitoring={true}
+          className="rounded-lg"
+        />
       </div>
 
       {/* Add Modal */}
@@ -434,7 +520,7 @@ const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrder
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">注文日</label>
                   <input
@@ -453,6 +539,21 @@ const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrder
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                     required
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">担当者</label>
+                  <select
+                    value={newOrder.assignedWorker}
+                    onChange={(e) => setNewOrder({...newOrder, assignedWorker: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">未割当</option>
+                    {workers.filter(w => w.role === 'operator').map(worker => (
+                      <option key={worker.id} value={worker.id}>
+                        {worker.name} ({worker.department})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div>
@@ -589,7 +690,7 @@ const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrder
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">注文日</label>
                   <input
@@ -607,6 +708,21 @@ const OrderManagement = ({ orders, onFilter, onAdd, onUpdate, onDelete, allOrder
                     onChange={(e) => setEditingOrder({...editingOrder, deliveryDate: e.target.value})}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">担当者</label>
+                  <select
+                    value={editingOrder.assignedWorker || ''}
+                    onChange={(e) => setEditingOrder({...editingOrder, assignedWorker: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">未割当</option>
+                    {workers.filter(w => w.role === 'operator').map(worker => (
+                      <option key={worker.id} value={worker.id}>
+                        {worker.name} ({worker.department})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div>
