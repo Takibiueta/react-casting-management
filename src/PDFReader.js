@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import { Upload, FileText, Check, X, Loader } from 'lucide-react';
+import { Upload, FileText, Check, X, Loader, Brain, Settings } from 'lucide-react';
 import { generateOrderId } from './utils/uniqueId';
+import { detectPDFFormat, extractDataWithFormat, evaluateExtractionQuality } from './utils/pdfFormatDetector';
+import { aiExtractor } from './utils/aiLearningExtractor';
 
 // PDF.js worker設定
 const setupPdfWorker = () => {
@@ -34,6 +36,10 @@ const PDFReader = ({ onOrderExtracted, onMultipleOrdersExtracted }) => {
   const [selectedPage, setSelectedPage] = useState(0);
   const [extractedData, setExtractedData] = useState({});
   const [extractionQuality, setExtractionQuality] = useState(0);
+  const [detectedFormat, setDetectedFormat] = useState(null);
+  const [useAI, setUseAI] = useState(false);
+  const [isLearningMode, setIsLearningMode] = useState(false);
+  const [extractionMethods, setExtractionMethods] = useState([]);
   const fileInputRef = useRef();
 
   // PDF.js Worker初期化
@@ -101,15 +107,60 @@ const PDFReader = ({ onOrderExtracted, onMultipleOrdersExtracted }) => {
         
         const imageUrl = canvas.toDataURL();
         
-        // テキストからデータ抽出
-        const extractedPageData = extractDataFromText(text);
+        // フォーマット検出
+        const format = detectPDFFormat(text);
+        
+        // 複数の抽出方法を試行
+        const methods = [];
+        
+        // 1. フォーマット検出による抽出
+        const formatData = extractDataWithFormat(text, format);
+        const formatQuality = evaluateExtractionQuality(formatData);
+        methods.push({
+          method: 'format',
+          data: formatData,
+          quality: formatQuality.quality,
+          format: format.name
+        });
+        
+        // 2. 従来のパターンマッチング
+        const patternData = extractDataFromText(text);
+        const patternQuality = evaluateDataQuality(patternData);
+        methods.push({
+          method: 'pattern',
+          data: patternData,
+          quality: patternQuality,
+          format: '汎用パターン'
+        });
+        
+        // 3. AI抽出（有効な場合）
+        if (useAI) {
+          try {
+            const aiData = await aiExtractor.extractWithAI(text, { format: format.id });
+            methods.push({
+              method: 'ai',
+              data: aiData,
+              quality: aiData.confidence || 0,
+              format: 'AI抽出'
+            });
+          } catch (error) {
+            console.error('AI抽出エラー:', error);
+          }
+        }
+        
+        // 最も品質の高い結果を選択
+        methods.sort((a, b) => b.quality - a.quality);
+        const bestMethod = methods[0];
         
         pages.push({
           pageNum,
           text,
           imageUrl,
-          extractedData: extractedPageData,
-          quality: evaluateDataQuality(extractedPageData)
+          extractedData: bestMethod.data,
+          quality: bestMethod.quality,
+          detectedFormat: format,
+          extractionMethods: methods,
+          bestMethod: bestMethod.method
         });
       }
       
@@ -118,6 +169,8 @@ const PDFReader = ({ onOrderExtracted, onMultipleOrdersExtracted }) => {
         setSelectedPage(0);
         setExtractedData(pages[0].extractedData);
         setExtractionQuality(pages[0].quality);
+        setDetectedFormat(pages[0].detectedFormat);
+        setExtractionMethods(pages[0].extractionMethods);
       }
     } catch (error) {
       console.error('PDF処理エラー:', error);
@@ -488,18 +541,52 @@ const PDFReader = ({ onOrderExtracted, onMultipleOrdersExtracted }) => {
     setSelectedPage(pageIndex);
     setExtractedData(pdfPages[pageIndex].extractedData);
     setExtractionQuality(pdfPages[pageIndex].quality);
+    setDetectedFormat(pdfPages[pageIndex].detectedFormat);
+    setExtractionMethods(pdfPages[pageIndex].extractionMethods);
+  };
+
+  // 学習機能：正解データを登録
+  const handleLearningFeedback = async () => {
+    if (!pdfPages[selectedPage] || !isLearningMode) return;
+    
+    const currentPage = pdfPages[selectedPage];
+    const correctedData = extractedData;
+    
+    // AI学習データとして登録
+    aiExtractor.addLearningData(
+      currentPage.text,
+      correctedData,
+      'user_correction'
+    );
+    
+    alert('学習データを登録しました。今後同様のフォーマットの抽出精度が向上します。');
+    setIsLearningMode(false);
   };
 
   return (
     <>
       {/* PDF読み取りボタン */}
-      <button 
-        onClick={() => setIsModalOpen(true)}
-        className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors shadow-md"
-      >
-        <FileText className="w-4 h-4" />
-        📄 PDF読み取り
-      </button>
+      <div className="flex items-center gap-2">
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors shadow-md"
+        >
+          <FileText className="w-4 h-4" />
+          📄 PDF読み取り
+        </button>
+        <button
+          onClick={() => setUseAI(!useAI)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm ${
+            useAI 
+              ? 'bg-purple-500 hover:bg-purple-600 text-white' 
+              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+          }`}
+          title="AI抽出機能のON/OFF"
+        >
+          <Brain className="w-4 h-4" />
+          AI
+        </button>
+      </div>
 
       {/* PDFモーダル */}
       {isModalOpen && (
@@ -596,12 +683,70 @@ const PDFReader = ({ onOrderExtracted, onMultipleOrdersExtracted }) => {
                   <div>
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-medium">抽出データ</h3>
-                      <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        extractionQuality >= 70 ? 'bg-green-100 text-green-800' :
-                        extractionQuality >= 50 ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        品質: {extractionQuality}%
+                      <div className="flex items-center gap-2">
+                        {detectedFormat && (
+                          <div className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                            {detectedFormat.name}
+                          </div>
+                        )}
+                        <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          extractionQuality >= 70 ? 'bg-green-100 text-green-800' :
+                          extractionQuality >= 50 ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          品質: {extractionQuality}%
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 抽出方法の詳細 */}
+                    {extractionMethods && extractionMethods.length > 1 && (
+                      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                        <h4 className="text-sm font-medium mb-2">抽出方法比較</h4>
+                        <div className="space-y-1">
+                          {extractionMethods.map((method, index) => (
+                            <div key={index} className="flex items-center justify-between text-xs">
+                              <span>{method.format}</span>
+                              <span className={`px-2 py-1 rounded ${
+                                method.quality >= 70 ? 'bg-green-100 text-green-700' :
+                                method.quality >= 50 ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-red-100 text-red-700'
+                              }`}>
+                                {method.quality}%
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 学習モード */}
+                    <div className="mb-4 p-3 bg-purple-50 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-medium text-purple-800">学習モード</h4>
+                          <p className="text-xs text-purple-600">データを修正して学習データとして登録</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setIsLearningMode(!isLearningMode)}
+                            className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                              isLearningMode 
+                                ? 'bg-purple-500 text-white' 
+                                : 'bg-purple-200 text-purple-700 hover:bg-purple-300'
+                            }`}
+                          >
+                            {isLearningMode ? '学習中' : '学習開始'}
+                          </button>
+                          {isLearningMode && (
+                            <button
+                              onClick={handleLearningFeedback}
+                              className="px-3 py-1 bg-green-500 text-white rounded text-xs font-medium hover:bg-green-600 transition-colors"
+                            >
+                              登録
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
