@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Upload, FileText, Check, X, Loader } from 'lucide-react';
-import { generateOrderId } from '../utils/uniqueId';
+import { generateOrderId } from './utils/uniqueId';
 
 // PDF.js worker設定
 const setupPdfWorker = () => {
