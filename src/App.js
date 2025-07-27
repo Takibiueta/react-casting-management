@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useOrderData, useProductData, useCustomerData } from './hooks/useLocalStorage';
+import { useWorkflowTemplates } from './hooks/useWorkflowTemplates';
 import { AuthProvider, useAuth, usePermissions } from './hooks/useAuth';
 import LoginPage from './components/LoginPage';
 import FieldWorkerDashboard from './components/FieldWorkerDashboard';
@@ -8,6 +9,8 @@ import TabNavigation from './components/TabNavigation';
 import OrderManagement from './components/OrderManagement';
 import ProductManagement from './components/ProductManagement';
 import CustomerManagement from './components/CustomerManagement';
+import ShippingManagement from './components/ShippingManagement';
+import WorkflowTemplate from './components/WorkflowTemplate';
 import AIChat from './components/AIChat';
 import PDFReader from './PDFReader';
 import ExcelImporter from './ExcelImporter';
@@ -74,7 +77,7 @@ const sampleOrders = [
     totalWeight: 84.0,
     orderDate: '2024-12-25',
     deliveryDate: '2025-03-21',
-    status: 'processing',
+    status: 'completed',
     assignedWorker: 'worker2',
     notes: '枠6W分のみ'
   },
@@ -179,6 +182,12 @@ const AppContent = () => {
   const { orders, addOrder, updateOrder, deleteOrder, setOrders } = useOrderData();
   const { products, addProduct, updateProduct, deleteProduct, setProducts } = useProductData();
   const { customers, addCustomer, updateCustomer, deleteCustomer, setCustomers } = useCustomerData();
+  const { 
+    templates, 
+    addTemplate, 
+    updateTemplate, 
+    deleteTemplate 
+  } = useWorkflowTemplates();
 
   // Initialize sample data if empty
   useEffect(() => {
@@ -297,6 +306,24 @@ const AppContent = () => {
             allCustomers={customers}
           />
         );
+      case 'shipping':
+        return (
+          <ShippingManagement
+            orders={orders}
+            onUpdateOrder={updateOrder}
+            customers={customers}
+          />
+        );
+      case 'workflow':
+        return (
+          <WorkflowTemplate
+            products={products}
+            templates={templates}
+            onSaveTemplate={addTemplate}
+            onUpdateTemplate={updateTemplate}
+            onDeleteTemplate={deleteTemplate}
+          />
+        );
       default:
         return null;
     }
@@ -312,7 +339,7 @@ const AppContent = () => {
             <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
               <span className="text-lg font-bold">🏭</span>
             </div>
-            <h1 className="text-2xl font-bold">ステンレス鋳造管理システム - 管理画面</h1>
+            <h1 className="text-2xl font-bold">黒石鋳工所管理システム - 管理画面</h1>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm opacity-90">

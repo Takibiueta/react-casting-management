@@ -1,11 +1,13 @@
 import React from 'react';
-import { Package, Users, ShoppingCart } from 'lucide-react';
+import { Package, Users, ShoppingCart, Truck, FileText } from 'lucide-react';
 
 const TabNavigation = ({ activeTab, onTabChange }) => {
   const tabs = [
     { id: 'orders', name: '📦 注文管理', icon: ShoppingCart },
     { id: 'products', name: '📋 製品管理', icon: Package },
-    { id: 'customers', name: '🏢 取引先管理', icon: Users }
+    { id: 'customers', name: '🏢 取引先管理', icon: Users },
+    { id: 'shipping', name: '🚚 出荷管理', icon: Truck },
+    { id: 'workflow', name: '📋 工程表', icon: FileText }
   ];
 
   return (

@@ -114,7 +114,7 @@ const FieldWorkerDashboard = ({ orders, products, onUpdateOrder }) => {
               <span className="text-lg font-bold">🏭</span>
             </div>
             <div>
-              <h1 className="text-xl font-bold">現場作業画面</h1>
+              <h1 className="text-xl font-bold">黒石鋳工所 現場作業画面</h1>
               <p className="text-sm opacity-90">
                 <User className="w-4 h-4 inline mr-1" />
                 {currentUser?.name} ({currentUser?.department})

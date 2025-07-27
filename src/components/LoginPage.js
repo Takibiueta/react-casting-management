@@ -23,7 +23,7 @@ const LoginPage = () => {
             <span className="text-3xl">🏭</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-800 mb-2">
-            鋳造管理システム
+            黒石鋳工所管理システム
           </h1>
           <p className="text-gray-600">
             現場作業者向けログイン
