@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Upload, FileText, Check, X, Loader } from 'lucide-react';
+import { generateOrderId } from '../utils/uniqueId';
 
 // PDF.js worker設定
 const setupPdfWorker = () => {
@@ -322,9 +323,9 @@ const PDFReader = ({ onOrderExtracted, onMultipleOrdersExtracted }) => {
   // 注文データとして追加
   const handleAddOrder = () => {
     const orderData = {
-      id: Date.now(),
+      id: generateOrderId(),
       priority: 1,
-      orderNumber: extractedData.orderNumber || `PDF-${Date.now()}`,
+      orderNumber: extractedData.orderNumber || `PDF-${generateOrderId()}`,
       productName: extractedData.productName || '不明',
       productCode: extractedData.productCode || '',
       material: extractedData.material || 'S14',
@@ -351,9 +352,9 @@ const PDFReader = ({ onOrderExtracted, onMultipleOrdersExtracted }) => {
   // 全ページから注文を追加
   const handleAddAllOrders = () => {
     const orders = pdfPages.map((page, index) => ({
-      id: Date.now() + index,
+      id: generateOrderId(),
       priority: index + 1,
-      orderNumber: page.extractedData.orderNumber || `PDF-${Date.now()}-${index + 1}`,
+      orderNumber: page.extractedData.orderNumber || `PDF-${generateOrderId()}-${index + 1}`,
       productName: page.extractedData.productName || '不明',
       productCode: page.extractedData.productCode || '',
       material: page.extractedData.material || 'S14',

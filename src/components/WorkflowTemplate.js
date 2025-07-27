@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit, Trash2, Copy, Printer, Save, X, Clock, CheckSquare } from 'lucide-react';
+import { generateWorkflowId } from '../utils/uniqueId';
 
 const WorkflowTemplate = ({ products, onSaveTemplate, templates = [], onUpdateTemplate, onDeleteTemplate }) => {
   const [activeTab, setActiveTab] = useState('list');
@@ -155,7 +156,7 @@ const WorkflowTemplate = ({ products, onSaveTemplate, templates = [], onUpdateTe
     const totalTime = newTemplate.steps.reduce((sum, step) => sum + (step.estimatedTime || 0), 0);
     const templateData = {
       ...newTemplate,
-      id: newTemplate.id || `template_${Date.now()}`,
+      id: newTemplate.id || generateWorkflowId(),
       totalEstimatedTime: totalTime,
       createdAt: newTemplate.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()

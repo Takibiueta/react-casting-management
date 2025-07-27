@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import { generateOrderId } from './uniqueId';
 
 // PDF.js worker を設定
 const setupPdfWorker = () => {
@@ -220,7 +221,7 @@ export const parseOrderData = (extractedText) => {
     
     // 抽出されたデータを返す
     const extractedData = {
-      orderNumber: orderNumber || `PDF-${Date.now()}`,
+      orderNumber: orderNumber || `PDF-${generateOrderId()}`,
       customer: customer || 'PDF抽出顧客',
       productCode: productCode || 'PDF-EXTRACT',
       productName: productName || 'PDF抽出製品',
@@ -335,7 +336,8 @@ export const parseMultipleOrders = (extractedText) => {
     const pageData = parseOrderData({ fullText: page.text, pages: [page] });
     
     if (pageData.success) {
-      // ページ番号を注文番号に追加
+      // ページ番号を注文番号に追加（新しいIDを生成）
+      pageData.data.id = generateOrderId();
       pageData.data.orderNumber = `${pageData.data.orderNumber}-P${page.pageNum}`;
       pageData.data.notes = `PDFページ${page.pageNum}から抽出 - ${pageData.data.notes}`;
       orders.push(pageData.data);

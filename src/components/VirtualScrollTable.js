@@ -125,20 +125,47 @@ const VirtualScrollTable = ({
     </div>
   );
 
+  // ユニークキーの生成
+  const generateUniqueKey = useCallback((item, index) => {
+    // 複数の値を組み合わせてユニークなキーを生成
+    if (item.id) {
+      // IDが存在する場合は、追加のユニーク要素を付加
+      const uniqueElements = [
+        item.id,
+        item.orderNumber || '',
+        item.productCode || '',
+        index
+      ].filter(Boolean);
+      return uniqueElements.join('-');
+    }
+    
+    // IDが存在しない場合は、他のフィールドを使用
+    const fallbackElements = [
+      item.orderNumber || '',
+      item.productCode || '',
+      item.productName || '',
+      index,
+      Date.now(),
+      Math.random().toString(36).substr(2, 9) // ランダム文字列を追加
+    ].filter(Boolean);
+    
+    return fallbackElements.join('-');
+  }, []);
+
   // 行のレンダリング
   const renderRow = useCallback((item, index) => {
     const actualIndex = visibleItems.indexOf(item);
     
     return (
       <div
-        key={item.id || index}
+        key={generateUniqueKey(item, index)}
         className={`virtual-table-row data-row ${onRowClick ? 'clickable' : ''}`}
         style={getItemStyle(actualIndex)}
         onClick={onRowClick ? () => onRowClick(item, index) : undefined}
       >
-        {columns.map((column) => (
+        {columns.map((column, colIndex) => (
           <div
-            key={column.key}
+            key={`${generateUniqueKey(item, index)}-${column.key}-${colIndex}`}
             className={`virtual-table-cell data-cell ${column.className || ''}`}
             style={{ 
               width: column.width || 'auto',
@@ -153,7 +180,7 @@ const VirtualScrollTable = ({
         ))}
       </div>
     );
-  }, [visibleItems, getItemStyle, columns, formatCellValue, onRowClick]);
+  }, [visibleItems, getItemStyle, columns, formatCellValue, onRowClick, generateUniqueKey]);
 
   return (
     <div className={`virtual-scroll-table ${className}`}>
