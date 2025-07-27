@@ -138,7 +138,7 @@ const PDFReader = ({ onOrderExtracted, onMultipleOrdersExtracted }) => {
     }
   };
 
-  // テキストからデータ抽出（index.htmlの複雑なロジックを移植）
+  // テキストからデータ抽出（index.htmlの詳細なロジックを移植）
   const extractDataFromText = (text) => {
     const data = {
       orderNumber: '',
@@ -153,157 +153,254 @@ const PDFReader = ({ onOrderExtracted, onMultipleOrdersExtracted }) => {
       notes: ''
     };
 
-    // 注文番号抽出パターン
-    const orderPatterns = [
-      /注文番号[:\s]*([A-Z0-9-]+)/i,
-      /受注番号[:\s]*([A-Z0-9-]+)/i,
-      /発注番号[:\s]*([A-Z0-9-]+)/i,
-      /Order\s*No[:\s]*([A-Z0-9-]+)/i,
-      /([A-Z]{2}\d{6}[A-Z]{1,3})/,
-      /([M][A-Z]\d{3}[A-Z]{2,3})/
-    ];
+    try {
+      console.log('=== PDF解析開始 ===');
+      console.log('抽出テキスト（最初500文字）:', text.substring(0, 500));
+      console.log('テキスト長:', text.length);
 
-    for (const pattern of orderPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        data.orderNumber = match[1];
-        break;
+      // 1. 注文番号抽出 - 受注番号、注文番号の様々なパターン
+      const orderPatterns = [
+        /受注N[09][:：]?\s*(\d+)/i,                    // 受注N9：12345
+        /受注番号[:：]\s*([A-Z0-9\-]+)/i,              // 受注番号：ABC123
+        /注文番?号[:：\s]*([A-Z0-9\-]+)/i,             // 注文番号：123-456
+        /Order\s*No\.?\s*[:：]?\s*([A-Z0-9\-]+)/i,    // Order No: ORD123
+        /発注番?号[:：\s]*([A-Z0-9\-\s]+)/i,           // 発注番号：39 83 81 (スペース含む)
+        /発注№[:：\s]*([A-Z0-9\-\s]+)/i,               // 発注№：39 83 81
+        /NO\.?\s*[:：]?\s*([A-Z0-9\-]+)/i,            // NO: 123456
+        /管理番号[:：\s]*([A-Z0-9\-]+)/i,              // 管理番号：MGT123
+        /([0-9]{8})/g,                                // 8桁の数字 (00000142)
+        /([0-9]{2}\s+[0-9]{2}\s+[0-9]{2})/g,         // スペース区切りの番号 (39 83 81)
+        /(\d{8})/g,                                   // 8桁連続数字の改良版
+        /([0-9]+\s+[0-9]+\s+[0-9]+)/g,               // 複数桁スペース区切り番号
+        /^[\s]*([0-9]{8,})[\s]*$/m,                  // 行頭から8桁以上の数字
+        /発注\s*№?\s*[:：]?\s*([A-Z0-9\-\s]+?)[\s\n]/i, // 発注№の改良版
+        /受注\s*N[Oo0]?\s*[:：]?\s*([A-Z0-9\-\s]+?)[\s\n]/i // 受注No の改良版
+      ];
+
+      for (let i = 0; i < orderPatterns.length; i++) {
+        const pattern = orderPatterns[i];
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          data.orderNumber = match[1].trim();
+          console.log(`注文番号抽出（パターン${i+1}）:`, data.orderNumber);
+          break;
+        }
       }
-    }
 
-    // 顧客名抽出パターン
-    const customerPatterns = [
-      /([株式会社|有限会社]\s*[^\s\n]{2,20})/,
-      /([A-Z][a-z]+\s*[A-Z][a-z]+\s*(?:株式会社|Corp|Ltd))/,
-      /得意先[:\s]*([^\s\n]{3,20})/,
-      /お客様[:\s]*([^\s\n]{3,20})/,
-      /([株][^\s\n]{2,15})/
-    ];
+      // 2. 顧客名抽出パターン
+      const customerPatterns = [
+        /得意先名?[:：\s]*([^\n\r]+)/i,                     // 得意先名：XX株式会社
+        /顧客名?[:：\s]*([^\n\r]+)/i,                       // 顧客名：XX株式会社
+        /お客様[:：\s]*([^\n\r]+)/i,                        // お客様：XX株式会社
+        /Customer[:：\s]*([^\n\r]+)/i,                      // Customer: XX Corp
+        /([株式会社|有限会社|合同会社][^\s\n\r]{2,20})/,     // 株式会社XXXX
+        /([A-Z][a-z]+\s*[A-Z][a-z]+\s*(?:株式会社|Corp|Ltd))/,
+        /([株][^\s\n\r]{2,15})/,                           // 株XXXX
+        /([\u4e00-\u9faf]+(?:株式会社|有限会社|合同会社))/  // 漢字+会社名
+      ];
 
-    for (const pattern of customerPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        data.customerName = match[1];
-        break;
+      for (let i = 0; i < customerPatterns.length; i++) {
+        const pattern = customerPatterns[i];
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          data.customerName = match[1].trim();
+          console.log(`顧客名抽出（パターン${i+1}）:`, data.customerName);
+          break;
+        }
       }
-    }
 
-    // 品番抽出パターン
-    const productCodePatterns = [
-      /品番[:\s]*([A-Z0-9-]{4,20})/i,
-      /型番[:\s]*([A-Z0-9-]{4,20})/i,
-      /Part\s*No[:\s]*([A-Z0-9-]{4,20})/i,
-      /([P]\d{3}-\d{3}-\d{4})/,
-      /([SCH]\d{1,3})/,
-      /([VLN]-\d{1,2})/
-    ];
+      // 3. 品番抽出パターン（index.htmlの詳細パターンを使用）
+      const productCodePatterns = [
+        /品番[:：\s]*([A-Z0-9\-ｼ]+)/i,                       // 品番：7-B7912-2
+        /型番[:：\s]*([A-Z0-9\-ｼ]+)/i,                       // 型番：ABC-123
+        /Part\s*No\.?\s*[:：]?\s*([A-Z0-9\-ｼ]+)/i,          // Part No: 123-456
+        /製品番号[:：\s]*([A-Z0-9\-ｼ]+)/i,                   // 製品番号：PRD123
+        /品目\s*\(\s*([0-9]+\-[A-Z]+[0-9]+[\-ｼ]*[0-9]*)\s*\)/i, // 品目 (7-B7912-ｼ) 形式
+        /([0-9]+\-[A-Z]+[0-9]+[\-ｼ]*[0-9]*)/g,              // 7-B7912-2 または 7-B7912-ｼ 形式
+        /([A-Z]+[0-9]+\-[0-9]+\-[0-9]+)/g,                   // ABC123-45-6 形式
+        /([A-Z]+\-[0-9]+\-[A-Z0-9]+)/g,                      // ABC-123-XYZ 形式
+        /(P[0-9]+\-[0-9]+\-[0-9]+)/g,                        // P815-110-0162 形式
+        /(7\-B7\s*9\s*12[\-ｼ]*)/g,                          // スペース入りパターン 7-B7 9 12-ｼ
+        /([0-9]+[\-\s]*[A-Z]+[0-9]+[\-\s]*ｼ)/i,             // 7-B7912-ｼ のような特殊文字含む
+        /^[\s]*([0-9]+\-[A-Z]+[0-9]+[\-ｼ]+[0-9]*)[\s]*$/m,   // 行独立の品番パターン
+        /([SCH]\d{1,3})/,                                    // SCH123形式
+        /([VLN]-\d{1,2})/                                    // VLN-15形式
+      ];
 
-    for (const pattern of productCodePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        data.productCode = match[1];
-        break;
+      for (let i = 0; i < productCodePatterns.length; i++) {
+        const pattern = productCodePatterns[i];
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          data.productCode = match[1].trim();
+          console.log(`品番抽出（パターン${i+1}）:`, data.productCode, 'マッチ:', match[0]);
+          break;
+        }
       }
-    }
 
-    // 品名抽出パターン
-    const productNamePatterns = [
-      /品名[:\s]*([ァ-ヴー\s]{3,30})/,
-      /製品名[:\s]*([ァ-ヴー\s]{3,30})/,
-      /(コネクタ[^\s\n]{0,20})/,
-      /(バルブ[^\s\n]{0,20})/,
-      /(フランジ[^\s\n]{0,20})/,
-      /(エルボ[^\s\n]{0,20})/
-    ];
+      // 4. 品名抽出パターン（index.htmlの詳細パターンを使用）
+      const productNamePatterns = [
+        /品名[:：\s]*([^\n\r]+)/i,                           // 品名：コネクタ VLN-15
+        /製品名[:：\s]*([^\n\r]+)/i,                         // 製品名：フランジ
+        /部品名[:：\s]*([^\n\r]+)/i,                         // 部品名：ボルト
+        /名称[:：\s]*([^\n\r]+)/i,                           // 名称：ガスケット
+        /品目[^(]*\([^)]*\)\s*\*?\s*([ｱ-ﾝｼﾘﾝﾀﾞ][^【\n\r]*)/i, // 品目 (7-B7912-ｼ) * ｼﾘﾝﾀﾞ(ﾍｲｶﾞﾜ)
+        /(ｼﾘﾝﾀﾞ[^【\n\r]*\([^)]*\))/i,                      // ｼﾘﾝﾀﾞ(ﾍｲｶﾞﾜ) 改良版
+        /(ｼﾘﾝﾀﾞ[^【\n\r]*)/i,                              // ｼﾘﾝﾀﾞXXX
+        /(コネクタ[^\n\r]*)/i,                               // コネクタ XXX
+        /(フランジ[^\n\r]*)/i,                               // フランジ XXX
+        /(ボルト[^\n\r]*)/i,                                 // ボルト XXX
+        /(ナット[^\n\r]*)/i,                                 // ナット XXX
+        /(ガスケット[^\n\r]*)/i,                             // ガスケット XXX
+        /(継手[^\n\r]*)/i,                                   // 継手 XXX
+        /(バルブ[^\n\r]*)/i,                                 // バルブ XXX
+        /(シリンダ[^\n\r]*)/i,                               // シリンダ XXX
+        /([ァ-ヴー\s]{3,30})/                                // カタカナ名称
+      ];
 
-    for (const pattern of productNamePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        data.productName = match[1];
-        break;
+      for (let i = 0; i < productNamePatterns.length; i++) {
+        const pattern = productNamePatterns[i];
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          data.productName = match[1].trim();
+          console.log(`品名抽出（パターン${i+1}）:`, data.productName);
+          break;
+        }
       }
-    }
 
-    // 材質抽出パターン
-    const materialPatterns = [
-      /材質[:\s]*(S1[34]|SUS30[0-9]|FCD[0-9]{3})/i,
-      /材料[:\s]*(S1[34]|SUS30[0-9]|FCD[0-9]{3})/i,
-      /(S14|S13|SUS304|SUS316|FCD400|FCD450)/,
-      /ステンレス[:\s]*(S1[34])/i
-    ];
+      // 5. 材質抽出パターン（より詳細に）
+      const materialPatterns = [
+        /材質[:：\s]*(S1[34]|SUS30[0-9]L?|FCD[0-9]{3}|SCPH[0-9]+|SCS1[34]|FC[0-9]{3})/i,
+        /材料[:：\s]*(S1[34]|SUS30[0-9]L?|FCD[0-9]{3}|SCPH[0-9]+|SCS1[34]|FC[0-9]{3})/i,
+        /Material[:：\s]*(S1[34]|SUS30[0-9]L?|FCD[0-9]{3}|SCPH[0-9]+|SCS1[34]|FC[0-9]{3})/i,
+        /(S14|S13|SUS304|SUS316L?|FCD400|FCD450|SCPH2|SCS13|SCS14|FC200|FC250)/g,
+        /ステンレス[:：\s]*(S1[34]|SUS30[0-9]L?)/i,
+        /(F\s*C\s*D\s*[0-9]+\s*[\-0-9]*|F\s*C\s*[0-9]+\s*[\-0-9]*|S\s*C\s*P\s*H\s*[0-9]+\s*[\-0-9]*)/i
+      ];
 
-    for (const pattern of materialPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        data.material = match[1];
-        break;
+      for (let i = 0; i < materialPatterns.length; i++) {
+        const pattern = materialPatterns[i];
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          data.material = match[1].trim().replace(/\s+/g, '');
+          console.log(`材質抽出（パターン${i+1}）:`, data.material);
+          break;
+        }
       }
-    }
 
-    // 重量抽出パターン
-    const weightPatterns = [
-      /単重[:\s]*(\d+\.?\d*)\s*kg/i,
-      /重量[:\s]*(\d+\.?\d*)\s*kg/i,
-      /(\d+\.?\d*)\s*kg/i,
-      /(\d+\.?\d*)\s*㎏/
-    ];
+      // 6. 重量抽出パターン
+      const weightPatterns = [
+        /単重量?[:：\s]*([0-9]+\.?[0-9]*)\s*(?:kg|KG|ｋｇ)/i,
+        /重量[:：\s]*([0-9]+\.?[0-9]*)\s*(?:kg|KG|ｋｇ)/i,
+        /Weight[:：\s]*([0-9]+\.?[0-9]*)\s*(?:kg|KG)/i,
+        /([0-9]+\.?[0-9]*)\s*(?:kg|KG|ｋｇ)/i,
+        /([0-9]+\.?[0-9]*)\s*㎏/,
+        /重[:：\s]*([0-9]+\.?[0-9]*)/i
+      ];
 
-    for (const pattern of weightPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        data.unitWeight = parseFloat(match[1]);
-        break;
+      for (let i = 0; i < weightPatterns.length; i++) {
+        const pattern = weightPatterns[i];
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          data.unitWeight = parseFloat(match[1]);
+          console.log(`重量抽出（パターン${i+1}）:`, data.unitWeight, 'kg');
+          break;
+        }
       }
-    }
 
-    // 数量抽出パターン
-    const quantityPatterns = [
-      /数量[:\s]*(\d+)\s*個/i,
-      /個数[:\s]*(\d+)/i,
-      /(\d+)\s*個/,
-      /(\d+)\s*ケ/,
-      /(\d+)\s*pc[s]?/i
-    ];
+      // 7. 数量抽出パターン
+      const quantityPatterns = [
+        /数量[:：\s]*([0-9]+)\s*(?:個|ケ|pcs?|pieces?)/i,
+        /個数[:：\s]*([0-9]+)/i,
+        /Quantity[:：\s]*([0-9]+)/i,
+        /Qty[:：\s]*([0-9]+)/i,
+        /([0-9]+)\s*(?:個|ケ|pcs?|pieces?)/i,
+        /×\s*([0-9]+)/i,
+        /数[:：\s]*([0-9]+)/i
+      ];
 
-    for (const pattern of quantityPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        data.quantity = parseInt(match[1]);
-        break;
+      for (let i = 0; i < quantityPatterns.length; i++) {
+        const pattern = quantityPatterns[i];
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          data.quantity = parseInt(match[1]);
+          console.log(`数量抽出（パターン${i+1}）:`, data.quantity);
+          break;
+        }
       }
-    }
 
-    // 日付抽出パターン（注文日）
-    const orderDatePatterns = [
-      /注文日[:\s]*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/,
-      /受注日[:\s]*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/,
-      /発注日[:\s]*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/
-    ];
+      // 8. 日付抽出パターン（注文日・発注日）
+      const orderDatePatterns = [
+        /注文日[:：\s]*([0-9]{4}[年\/-][0-9]{1,2}[月\/-][0-9]{1,2}[日]?)/i,
+        /受注日[:：\s]*([0-9]{4}[年\/-][0-9]{1,2}[月\/-][0-9]{1,2}[日]?)/i,
+        /発注日[:：\s]*([0-9]{4}[年\/-][0-9]{1,2}[月\/-][0-9]{1,2}[日]?)/i,
+        /Order\s*Date[:：\s]*([0-9]{4}[年\/-][0-9]{1,2}[月\/-][0-9]{1,2}[日]?)/i
+      ];
 
-    for (const pattern of orderDatePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        data.orderDate = match[1];
-        break;
+      for (let i = 0; i < orderDatePatterns.length; i++) {
+        const pattern = orderDatePatterns[i];
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          // 日付フォーマットを標準化
+          data.orderDate = match[1].replace(/[年月]/g, '-').replace(/日/g, '');
+          console.log(`注文日抽出（パターン${i+1}）:`, data.orderDate);
+          break;
+        }
       }
-    }
 
-    // 日付抽出パターン（納期）
-    const deliveryDatePatterns = [
-      /納期[:\s]*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/,
-      /納入日[:\s]*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/,
-      /希望納期[:\s]*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/
-    ];
+      // 9. 日付抽出パターン（納期）
+      const deliveryDatePatterns = [
+        /納期[:：\s]*([0-9]{4}[年\/-][0-9]{1,2}[月\/-][0-9]{1,2}[日]?)/i,
+        /納入日[:：\s]*([0-9]{4}[年\/-][0-9]{1,2}[月\/-][0-9]{1,2}[日]?)/i,
+        /希望納期[:：\s]*([0-9]{4}[年\/-][0-9]{1,2}[月\/-][0-9]{1,2}[日]?)/i,
+        /Delivery\s*Date[:：\s]*([0-9]{4}[年\/-][0-9]{1,2}[月\/-][0-9]{1,2}[日]?)/i
+      ];
 
-    for (const pattern of deliveryDatePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        data.deliveryDate = match[1];
-        break;
+      for (let i = 0; i < deliveryDatePatterns.length; i++) {
+        const pattern = deliveryDatePatterns[i];
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          // 日付フォーマットを標準化
+          data.deliveryDate = match[1].replace(/[年月]/g, '-').replace(/日/g, '');
+          console.log(`納期抽出（パターン${i+1}）:`, data.deliveryDate);
+          break;
+        }
       }
-    }
 
-    return data;
+      // フォールバック処理（データが不足している場合）
+      if (!data.productCode) {
+        // より緩い品番パターン
+        const codeMatch = text.match(/([0-9]+\-[A-Z]+[0-9]+(?:\-?ｼ)?)/);
+        if (codeMatch) {
+          data.productCode = codeMatch[1];
+          console.log('フォールバック品番:', data.productCode);
+        }
+      }
+
+      if (!data.productName) {
+        // カタカナのみのパターン
+        const nameMatch = text.match(/(ｼﾘﾝﾀﾞ\([^)]+\))/);
+        if (nameMatch) {
+          data.productName = nameMatch[1];
+          console.log('フォールバック品名:', data.productName);
+        }
+      }
+
+      if (!data.material) {
+        // スペース入りFCD、FC、SCPH系の材質を探す
+        const matMatch = text.match(/(F\s*C\s*D\s*[0-9]+\s*[\-0-9]*|F\s*C\s*[0-9]+\s*[\-0-9]*|S\s*C\s*P\s*H\s*[0-9]+\s*[\-0-9]*)/i);
+        if (matMatch) {
+          data.material = matMatch[1].replace(/\s+/g, '');
+          console.log('フォールバック材質:', data.material);
+        }
+      }
+
+      console.log('=== 抽出結果 ===', data);
+      return data;
+
+    } catch (error) {
+      console.error('PDF抽出エラー:', error);
+      return data;
+    }
   };
 
   // データ品質評価
